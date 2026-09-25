@@ -9,6 +9,7 @@ const styles: Record<string, string> = {
   changes_requested: "bg-orange-50 text-orange-700 ring-orange-200",
   approved: "bg-emerald-50 text-emerald-700 ring-emerald-200",
   open: "bg-slate-100 text-slate-700 ring-slate-200",
+  requested: "bg-orange-50 text-orange-700 ring-orange-200",
   resolved: "bg-emerald-50 text-emerald-700 ring-emerald-200",
   dismissed: "bg-slate-100 text-slate-600 ring-slate-200",
 };

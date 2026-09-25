@@ -2,7 +2,7 @@ export const productTypes = ["personal_loan", "credit_card", "mortgage"] as cons
 export const channels = ["website", "email", "paid_social", "affiliate", "other"] as const;
 export const submissionStatuses = ["pending", "in_review", "changes_requested", "approved"] as const;
 export const riskLevels = ["low", "medium", "high"] as const;
-export const findingStatuses = ["open", "resolved", "dismissed"] as const;
+export const findingStatuses = ["open", "requested", "resolved", "dismissed"] as const;
 
 export type ProductType = (typeof productTypes)[number];
 export type Channel = (typeof channels)[number];
@@ -12,6 +12,9 @@ export type FindingStatus = (typeof findingStatuses)[number];
 
 export type Submission = {
   id: string;
+  submissionGroupId: string;
+  versionNumber: number;
+  previousVersionId: string | null;
   title: string;
   productType: ProductType;
   channel: Channel;
@@ -31,9 +34,11 @@ export type ComplianceFinding = {
   submissionId: string;
   category: string;
   severity: RiskLevel;
+  severityRationale: string;
   flaggedText: string;
   explanation: string;
   recommendation: string;
+  suggestedRewrites: string[];
   status: FindingStatus;
   createdAt: string;
 };

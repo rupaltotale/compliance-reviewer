@@ -20,6 +20,9 @@ import type {
 
 type SubmissionRow = {
   id: string;
+  submission_group_id?: string;
+  version_number?: number;
+  previous_version_id?: string | null;
   title: string;
   product_type: Submission["productType"];
   channel: Submission["channel"];
@@ -39,9 +42,11 @@ type FindingRow = {
   submission_id: string;
   category: string;
   severity: ComplianceFinding["severity"];
+  severity_rationale?: string;
   flagged_text: string;
   explanation: string;
   recommendation: string;
+  suggested_rewrites?: string[];
   status: ComplianceFinding["status"];
   created_at: string;
 };
@@ -66,6 +71,9 @@ type AuditRow = {
 
 const mapSubmission = (row: SubmissionRow): Submission => ({
   id: row.id,
+  submissionGroupId: row.submission_group_id ?? row.id,
+  versionNumber: row.version_number ?? 1,
+  previousVersionId: row.previous_version_id ?? null,
   title: row.title,
   productType: row.product_type,
   channel: row.channel,
@@ -80,14 +88,26 @@ const mapSubmission = (row: SubmissionRow): Submission => ({
   updatedAt: row.updated_at,
 });
 
+const defaultSeverityRationale = (severity: ComplianceFinding["severity"]) => {
+  if (severity === "high") {
+    return "High because the claim could materially mislead consumers about approval, eligibility, pricing, cost, or comparative value.";
+  }
+  if (severity === "medium") {
+    return "Medium because the claim needs qualification, context, or substantiation but is not an explicit material guarantee.";
+  }
+  return "Low because the concern is limited and is unlikely to materially change a reasonable consumer’s understanding.";
+};
+
 const mapFinding = (row: FindingRow): ComplianceFinding => ({
   id: row.id,
   submissionId: row.submission_id,
   category: row.category,
   severity: row.severity,
+  severityRationale: row.severity_rationale ?? defaultSeverityRationale(row.severity),
   flaggedText: row.flagged_text,
   explanation: row.explanation,
   recommendation: row.recommendation,
+  suggestedRewrites: row.suggested_rewrites ?? [],
   status: row.status,
   createdAt: row.created_at,
 });
@@ -128,22 +148,51 @@ const demoStore =
   });
 globalWithDemo.clearPathDemo = demoStore;
 
+function latestVersions(submissions: Submission[]) {
+  return [...submissions]
+    .sort((a, b) => b.versionNumber - a.versionNumber)
+    .filter(
+      (submission, index, sorted) =>
+        sorted.findIndex((item) => item.submissionGroupId === submission.submissionGroupId) ===
+        index,
+    );
+}
+
 export async function listSubmissions(filters: QueueFilters = {}) {
   if (!isSupabaseConfigured()) {
-    return demoStore.submissions
+    return latestVersions(demoStore.submissions)
       .filter((item) => !filters.status || item.status === filters.status)
       .filter((item) => !filters.risk || item.riskLevel === filters.risk)
       .filter((item) => !filters.product || item.productType === filters.product)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
-  let query = getSupabase().from("submissions").select("*").order("created_at", { ascending: false });
-  if (filters.status) query = query.eq("status", filters.status);
-  if (filters.risk) query = query.eq("risk_level", filters.risk);
-  if (filters.product) query = query.eq("product_type", filters.product);
-  const { data, error } = await query;
+  const { data, error } = await getSupabase()
+    .from("submissions")
+    .select("*")
+    .order("created_at", { ascending: false });
   if (error) throw new Error(`Unable to load submissions: ${error.message}`);
-  return (data as SubmissionRow[]).map(mapSubmission);
+  return latestVersions((data as SubmissionRow[]).map(mapSubmission))
+    .filter((item) => !filters.status || item.status === filters.status)
+    .filter((item) => !filters.risk || item.riskLevel === filters.risk)
+    .filter((item) => !filters.product || item.productType === filters.product);
+}
+
+export async function getSubmissionVersions(groupId: string) {
+  if (!isSupabaseConfigured()) {
+    return demoStore.submissions
+      .filter((item) => item.submissionGroupId === groupId)
+      .sort((a, b) => b.versionNumber - a.versionNumber);
+  }
+  const { data, error } = await getSupabase()
+    .from("submissions")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(`Unable to load submission versions: ${error.message}`);
+  return (data as SubmissionRow[])
+    .map(mapSubmission)
+    .filter((item) => item.submissionGroupId === groupId)
+    .sort((a, b) => b.versionNumber - a.versionNumber);
 }
 
 export async function getSubmission(id: string): Promise<SubmissionDetail | null> {
@@ -185,6 +234,12 @@ export async function setFindingStatus(
   status: FindingStatus,
   actor: string,
 ) {
+  const eventDetail = (category: string) => {
+    if (status === "requested") return `Added to change request: ${category}`;
+    if (status === "open") return `Removed from change request: ${category}`;
+    if (status === "dismissed") return `Finding dismissed: ${category}`;
+    return `Finding resolved: ${category}`;
+  };
   if (!isSupabaseConfigured()) {
     const finding = demoStore.findings.find((item) => item.id === findingId);
     if (!finding) throw new Error("Finding not found.");
@@ -194,7 +249,7 @@ export async function setFindingStatus(
       submissionId: finding.submissionId,
       eventType: `finding_${status}`,
       actor,
-      detail: `Finding ${status}: ${finding.category}`,
+      detail: eventDetail(finding.category),
       createdAt: new Date().toISOString(),
     });
     return finding.submissionId;
@@ -212,7 +267,7 @@ export async function setFindingStatus(
     submission_id: data.submission_id,
     event_type: `finding_${status}`,
     actor,
-    detail: `Finding ${status}: ${data.category}`,
+    detail: eventDetail(data.category),
   });
   if (auditError) throw new Error(`Finding changed, but audit logging failed: ${auditError.message}`);
   return data.submission_id as string;
@@ -270,15 +325,29 @@ export async function recordDecision(
   if (auditError) throw new Error(`Decision recorded, but audit logging failed: ${auditError.message}`);
 }
 
-export async function createAnalyzedSubmission(
+type VersionMetadata = {
+  id: string;
+  submissionGroupId: string;
+  versionNumber: number;
+  previousVersionId: string | null;
+};
+
+async function persistAnalyzedSubmission(
   input: NewSubmissionInput,
   analysis: ComplianceAnalysis,
+  version: VersionMetadata,
 ) {
-  const id = crypto.randomUUID();
   const timestamp = new Date().toISOString();
+  const creationDetail =
+    version.versionNumber === 1
+      ? "Submission created"
+      : `Version ${version.versionNumber} created from version ${version.versionNumber - 1}`;
   if (!isSupabaseConfigured()) {
     demoStore.submissions.push({
-      id,
+      id: version.id,
+      submissionGroupId: version.submissionGroupId,
+      versionNumber: version.versionNumber,
+      previousVersionId: version.previousVersionId,
       title: input.title,
       productType: input.productType,
       channel: input.channel,
@@ -296,7 +365,7 @@ export async function createAnalyzedSubmission(
       ...analysis.findings.map((finding) => ({
         ...finding,
         id: crypto.randomUUID(),
-        submissionId: id,
+        submissionId: version.id,
         status: "open" as const,
         createdAt: timestamp,
       })),
@@ -304,27 +373,40 @@ export async function createAnalyzedSubmission(
     demoStore.auditEvents.push(
       {
         id: crypto.randomUUID(),
-        submissionId: id,
-        eventType: "submission_created",
+        submissionId: version.id,
+        eventType: version.versionNumber === 1 ? "submission_created" : "version_created",
         actor: input.submittedBy,
-        detail: "Submission created",
+        detail: creationDetail,
         createdAt: timestamp,
       },
       {
         id: crypto.randomUUID(),
-        submissionId: id,
+        submissionId: version.id,
         eventType: "analysis_completed",
         actor: "ClearPath AI",
         detail: `Automated pre-review completed with ${analysis.findings.length} potential issues`,
         createdAt: new Date(Date.now() + 1).toISOString(),
       },
     );
-    return id;
+    if (version.previousVersionId) {
+      demoStore.auditEvents.push({
+        id: crypto.randomUUID(),
+        submissionId: version.previousVersionId,
+        eventType: "new_version_created",
+        actor: input.submittedBy,
+        detail: `Version ${version.versionNumber} created`,
+        createdAt: timestamp,
+      });
+    }
+    return version.id;
   }
 
   const supabase = getSupabase();
   const { error: submissionError } = await supabase.from("submissions").insert({
-    id,
+    id: version.id,
+    submission_group_id: version.submissionGroupId,
+    version_number: version.versionNumber,
+    previous_version_id: version.previousVersionId,
     title: input.title,
     product_type: input.productType,
     channel: input.channel,
@@ -341,30 +423,104 @@ export async function createAnalyzedSubmission(
   if (analysis.findings.length > 0) {
     const { error: findingsError } = await supabase.from("compliance_findings").insert(
       analysis.findings.map((finding) => ({
-        submission_id: id,
+        submission_id: version.id,
         category: finding.category,
         severity: finding.severity,
+        severity_rationale: finding.severityRationale,
         flagged_text: finding.flaggedText,
         explanation: finding.explanation,
         recommendation: finding.recommendation,
+        suggested_rewrites: finding.suggestedRewrites,
       })),
     );
     if (findingsError) throw new Error(`Submission saved, but findings failed: ${findingsError.message}`);
   }
-  const { error: auditError } = await supabase.from("audit_events").insert([
+  const auditEvents = [
     {
-      submission_id: id,
-      event_type: "submission_created",
+      submission_id: version.id,
+      event_type: version.versionNumber === 1 ? "submission_created" : "version_created",
       actor: input.submittedBy,
-      detail: "Submission created",
+      detail: creationDetail,
     },
     {
-      submission_id: id,
+      submission_id: version.id,
       event_type: "analysis_completed",
       actor: "ClearPath AI",
       detail: `Automated pre-review completed with ${analysis.findings.length} potential issues`,
     },
-  ]);
+    ...(version.previousVersionId
+      ? [
+          {
+            submission_id: version.previousVersionId,
+            event_type: "new_version_created",
+            actor: input.submittedBy,
+            detail: `Version ${version.versionNumber} created`,
+          },
+        ]
+      : []),
+  ];
+  const { error: auditError } = await supabase.from("audit_events").insert(auditEvents);
   if (auditError) throw new Error(`Submission saved, but audit logging failed: ${auditError.message}`);
-  return id;
+  return version.id;
+}
+
+export async function createAnalyzedSubmission(
+  input: NewSubmissionInput,
+  analysis: ComplianceAnalysis,
+) {
+  const id = crypto.randomUUID();
+  return persistAnalyzedSubmission(input, analysis, {
+    id,
+    submissionGroupId: id,
+    versionNumber: 1,
+    previousVersionId: null,
+  });
+}
+
+export async function createSubmissionVersion(
+  sourceSubmissionId: string,
+  input: NewSubmissionInput,
+  analysis: ComplianceAnalysis,
+) {
+  if (!isSupabaseConfigured()) {
+    const source = demoStore.submissions.find((item) => item.id === sourceSubmissionId);
+    if (!source) throw new Error("The source submission could not be found.");
+    const versionNumber =
+      Math.max(
+        ...demoStore.submissions
+          .filter((item) => item.submissionGroupId === source.submissionGroupId)
+          .map((item) => item.versionNumber),
+      ) + 1;
+    return persistAnalyzedSubmission(input, analysis, {
+      id: crypto.randomUUID(),
+      submissionGroupId: source.submissionGroupId,
+      versionNumber,
+      previousVersionId: source.id,
+    });
+  }
+
+  const supabase = getSupabase();
+  const { data: sourceData, error: sourceError } = await supabase
+    .from("submissions")
+    .select("*")
+    .eq("id", sourceSubmissionId)
+    .maybeSingle();
+  if (sourceError) throw new Error(`Unable to load the source submission: ${sourceError.message}`);
+  if (!sourceData) throw new Error("The source submission could not be found.");
+  const source = mapSubmission(sourceData as SubmissionRow);
+  const { data: latestData, error: latestError } = await supabase
+    .from("submissions")
+    .select("version_number")
+    .eq("submission_group_id", source.submissionGroupId)
+    .order("version_number", { ascending: false })
+    .limit(1)
+    .single();
+  if (latestError) throw new Error(`Unable to determine the next version: ${latestError.message}`);
+
+  return persistAnalyzedSubmission(input, analysis, {
+    id: crypto.randomUUID(),
+    submissionGroupId: source.submissionGroupId,
+    versionNumber: Number(latestData.version_number) + 1,
+    previousVersionId: source.id,
+  });
 }

@@ -38,6 +38,11 @@ export function QueueTable({ submissions }: { submissions: Submission[] }) {
                 {submission.affiliateName && (
                   <p className="mt-0.5 truncate text-xs text-slate-500">{submission.affiliateName}</p>
                 )}
+                {submission.versionNumber > 1 && (
+                  <p className="mt-0.5 text-xs font-medium text-violet-600">
+                    Version {submission.versionNumber}
+                  </p>
+                )}
               </td>
               <td className="px-4 py-4 text-slate-600">{humanize(submission.productType)}</td>
               <td className="px-4 py-4 text-slate-600">{humanize(submission.channel)}</td>

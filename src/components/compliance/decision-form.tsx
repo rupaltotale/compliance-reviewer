@@ -32,7 +32,13 @@ function DecisionButton({
   );
 }
 
-export function DecisionForm({ submissionId }: { submissionId: string }) {
+export function DecisionForm({
+  submissionId,
+  requestedChanges = [],
+}: {
+  submissionId: string;
+  requestedChanges?: string[];
+}) {
   const initialState: DecisionActionState = {};
   const [state, action] = useActionState(
     submitDecisionAction.bind(null, submissionId),
@@ -48,10 +54,21 @@ export function DecisionForm({ submissionId }: { submissionId: string }) {
           id="comment"
           name="comment"
           rows={4}
+          defaultValue={
+            requestedChanges.length > 0
+              ? `Please address the following before resubmitting:\n${requestedChanges
+                  .map((change) => `• ${change}`)
+                  .join("\n")}`
+              : ""
+          }
           placeholder="Summarize your decision or explain the changes needed…"
           className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none placeholder:text-slate-400 focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
         />
-        <p className="mt-1.5 text-xs text-slate-500">Required when requesting changes.</p>
+        <p className="mt-1.5 text-xs text-slate-500">
+          {requestedChanges.length > 0
+            ? `${requestedChanges.length} finding${requestedChanges.length === 1 ? "" : "s"} included in this request.`
+            : "Select “Request this change” on a finding or write a custom comment."}
+        </p>
       </div>
       {state.message && (
         <p className={`text-sm ${state.success ? "text-emerald-700" : "text-red-700"}`}>

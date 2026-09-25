@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import { analyzeMarketing } from "@/lib/ai/analyze-marketing";
 import {
   createAnalyzedSubmission,
+  createSubmissionVersion,
+  getSubmission,
   recordDecision,
   setFindingStatus,
 } from "@/lib/db/repository";
@@ -56,11 +58,51 @@ export async function createSubmissionAction(
   redirect(`/submissions/${id}`);
 }
 
+export async function createSubmissionVersionAction(
+  sourceSubmissionId: string,
+  _previousState: SubmissionActionState,
+  formData: FormData,
+): Promise<SubmissionActionState> {
+  const parsed = newSubmissionSchema.safeParse({
+    title: formData.get("title"),
+    productType: formData.get("productType"),
+    channel: formData.get("channel"),
+    submittedBy: formData.get("submittedBy"),
+    affiliateName: formData.get("affiliateName"),
+    content: formData.get("content"),
+    destinationUrl: formData.get("destinationUrl"),
+  });
+  if (!parsed.success) {
+    return {
+      message: "Please correct the highlighted fields.",
+      fieldErrors: parsed.error.flatten().fieldErrors,
+    };
+  }
+
+  let id: string;
+  try {
+    const analysis = await analyzeMarketing({
+      productType: parsed.data.productType,
+      channel: parsed.data.channel,
+      content: parsed.data.content,
+      destinationUrl: parsed.data.destinationUrl,
+    });
+    id = await createSubmissionVersion(sourceSubmissionId, parsed.data, analysis);
+  } catch (error) {
+    return {
+      message: error instanceof Error ? error.message : "The new version could not be analyzed.",
+    };
+  }
+  revalidatePath("/");
+  revalidatePath(`/submissions/${sourceSubmissionId}`);
+  redirect(`/submissions/${id}`);
+}
+
 export async function updateFindingAction(formData: FormData) {
   const findingId = String(formData.get("findingId") ?? "");
   const requestedStatus = String(formData.get("status") ?? "");
   const status = findingStatuses.find((value) => value === requestedStatus);
-  if (!findingId || !status || status === "open") {
+  if (!findingId || !status) {
     throw new Error("A valid finding and resolution are required.");
   }
   const submissionId = await setFindingStatus(findingId, status, demoReviewer);
@@ -79,6 +121,18 @@ export async function submitDecisionAction(
   const comment = String(formData.get("comment") ?? "").trim();
   if (decision !== "approved" && decision !== "changes_requested") {
     return { message: "Choose a review decision." };
+  }
+  const submission = await getSubmission(submissionId);
+  if (!submission) {
+    return { message: "The submission could not be found." };
+  }
+  const requestedFindings = submission.findings.filter(
+    (finding) => finding.status === "requested",
+  );
+  if (decision === "approved" && requestedFindings.length > 0) {
+    return {
+      message: "Remove or dismiss requested changes before approving this submission.",
+    };
   }
   if (decision === "changes_requested" && comment.length < 10) {
     return { message: "Explain the requested changes in at least 10 characters." };

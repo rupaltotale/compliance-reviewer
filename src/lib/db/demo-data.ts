@@ -13,7 +13,9 @@ const isoDaysAgo = (days: number, hour = 14) => {
   return date.toISOString();
 };
 
-export const demoSubmissions: Submission[] = [
+const seededSubmissions: Array<
+  Omit<Submission, "submissionGroupId" | "versionNumber" | "previousVersionId">
+> = [
   {
     id: "11111111-1111-4111-8111-111111111111",
     title: "Fast Funds affiliate landing page",
@@ -176,7 +178,16 @@ export const demoSubmissions: Submission[] = [
   },
 ];
 
-export const demoFindings: ComplianceFinding[] = [
+export const demoSubmissions: Submission[] = seededSubmissions.map((submission) => ({
+  ...submission,
+  submissionGroupId: submission.id,
+  versionNumber: 1,
+  previousVersionId: null,
+}));
+
+const seededFindings: Array<
+  Omit<ComplianceFinding, "severityRationale" | "suggestedRewrites">
+> = [
   {
     id: "f1111111-1111-4111-8111-111111111111",
     submissionId: demoSubmissions[0].id,
@@ -251,7 +262,7 @@ export const demoFindings: ComplianceFinding[] = [
     flaggedText: "best rewards card for every traveler",
     explanation: "This broad superlative lacks a defined comparison set and may not be supportable for every consumer.",
     recommendation: "Define and substantiate a narrower comparison or remove the superlative.",
-    status: "open",
+    status: "requested",
     createdAt: isoDaysAgo(8, 11),
   },
   {
@@ -262,10 +273,40 @@ export const demoFindings: ComplianceFinding[] = [
     flaggedText: "Limited time: apply today",
     explanation: "The copy creates urgency without stating the offer deadline or basis for the limitation.",
     recommendation: "State the factual end date and applicable conditions, or remove the urgency language.",
-    status: "open",
+    status: "requested",
     createdAt: isoDaysAgo(8, 11),
   },
 ];
+
+export const demoFindings: ComplianceFinding[] = seededFindings.map((finding) => ({
+  ...finding,
+  severityRationale:
+    finding.severity === "high"
+      ? "High because the claim could materially mislead consumers about approval, eligibility, pricing, cost, or comparative value."
+      : finding.severity === "medium"
+        ? "Medium because the claim needs qualification, context, or substantiation but is not an explicit material guarantee."
+        : "Low because the concern is limited and is unlikely to materially change a reasonable consumer’s understanding.",
+  suggestedRewrites:
+    finding.category === "Approval and qualification claims"
+      ? [
+          "Check your eligibility for a personal loan. Approval and available terms depend on underwriting and creditworthiness.",
+        ]
+      : finding.category === "Qualification disclosure"
+        ? [
+            "Explore loan amounts up to $50,000. Available amounts and terms vary based on creditworthiness and underwriting.",
+          ]
+        : finding.category === "Rates and APR context"
+          ? [
+              "Qualified applicants may receive a 0% introductory APR for [duration]. After that, a variable APR of [APR range] applies.",
+            ]
+          : finding.category === "Comparative claims"
+            ? [
+                "Explore competitive rates available based on the applicant’s details and qualifications.",
+              ]
+            : finding.category === "Urgency and pressure"
+              ? ["Apply by [date] to be considered for this offer. Eligibility and terms apply."]
+              : [],
+}));
 
 export const demoReviews: Review[] = [
   {
@@ -283,6 +324,15 @@ export const demoReviews: Review[] = [
     decision: "changes_requested",
     comment: "Move the non-commitment disclosure closer to the primary prequalification claim.",
     createdAt: isoDaysAgo(5, 12),
+  },
+  {
+    id: "r8888888-8888-4888-8888-888888888888",
+    submissionId: demoSubmissions[7].id,
+    reviewer: "Alex Morgan",
+    decision: "changes_requested",
+    comment:
+      "Please address the following before resubmitting:\n• Comparative claims: Define and substantiate a narrower comparison or remove the superlative.\n• Urgency and pressure: State the factual end date and applicable conditions, or remove the urgency language.",
+    createdAt: isoDaysAgo(7, 14),
   },
 ];
 

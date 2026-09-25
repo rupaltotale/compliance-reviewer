@@ -6,7 +6,9 @@ import {
   Calendar,
   CircleCheck,
   ExternalLink,
+  FilePenLine,
   FileText,
+  History,
   Link2,
   UserRound,
 } from "lucide-react";
@@ -15,7 +17,7 @@ import { FindingCard } from "@/components/compliance/finding-card";
 import { DecisionForm } from "@/components/compliance/decision-form";
 import { HighlightedContent } from "@/components/submissions/highlighted-content";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { getSubmission } from "@/lib/db/repository";
+import { getSubmission, getSubmissionVersions } from "@/lib/db/repository";
 import { formatDate, formatDateTime, humanize } from "@/lib/utils";
 
 type DetailProps = { params: Promise<{ id: string }> };
@@ -24,7 +26,13 @@ export default async function SubmissionDetailPage({ params }: DetailProps) {
   const { id } = await params;
   const submission = await getSubmission(id);
   if (!submission) notFound();
+  const versions = await getSubmissionVersions(submission.submissionGroupId);
+  const isLatestVersion = versions[0]?.id === submission.id;
   const openFindings = submission.findings.filter((finding) => finding.status === "open");
+  const requestedFindings = submission.findings.filter(
+    (finding) => finding.status === "requested",
+  );
+  const outstandingFindings = openFindings.length + requestedFindings.length;
 
   return (
     <AppShell>
@@ -37,13 +45,46 @@ export default async function SubmissionDetailPage({ params }: DetailProps) {
             <div className="flex flex-wrap items-center gap-2">
               <StatusBadge value={submission.status} />
               <StatusBadge value={submission.riskLevel} dot />
+              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
+                Version {submission.versionNumber}
+              </span>
+              {!isLatestVersion && (
+                <span className="rounded-full bg-violet-50 px-2.5 py-1 text-xs font-semibold text-violet-700">
+                  Historical
+                </span>
+              )}
             </div>
             <h1 className="mt-3 text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">{submission.title}</h1>
             <p className="mt-2 text-sm text-slate-500">Submitted {formatDateTime(submission.createdAt)}</p>
           </div>
-          <div className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-right">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Open findings</p>
-            <p className="mt-1 text-2xl font-semibold text-slate-950">{openFindings.length}</p>
+          <div className="flex items-stretch gap-3">
+            {isLatestVersion && (
+              <Link
+                href={`/submissions/${submission.id}/edit`}
+                className="group inline-flex min-h-20 items-center gap-4 rounded-xl border border-slate-300 bg-white px-5 py-3 text-left shadow-sm hover:border-teal-300 hover:bg-teal-50/40"
+              >
+                <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-600 group-hover:bg-teal-100 group-hover:text-teal-700">
+                  <FilePenLine className="size-4" />
+                </span>
+                <span>
+                  <span className="block text-sm font-semibold text-slate-800 group-hover:text-teal-900">
+                    Create revised version
+                  </span>
+                  <span className="mt-1 block text-xs font-medium text-slate-500">
+                    {requestedFindings.length} requested · {openFindings.length} open
+                  </span>
+                </span>
+                <span className="ml-2 grid size-9 shrink-0 place-items-center rounded-full bg-slate-900 text-sm font-semibold text-white group-hover:bg-teal-700">
+                  {outstandingFindings}
+                </span>
+              </Link>
+            )}
+            {!isLatestVersion && (
+              <div className="flex min-h-20 min-w-36 flex-col justify-center rounded-xl border border-slate-200 bg-white px-5 py-3 text-right">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Outstanding</p>
+                <p className="mt-1 text-2xl font-semibold leading-none text-slate-950">{outstandingFindings}</p>
+              </div>
+            )}
           </div>
         </div>
 
@@ -58,9 +99,9 @@ export default async function SubmissionDetailPage({ params }: DetailProps) {
                 <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-6 text-[15px] leading-8 text-slate-800">
                   <HighlightedContent content={submission.content} findings={submission.findings} />
                 </div>
-                {openFindings.length > 0 && (
+                {outstandingFindings > 0 && (
                   <p className="mt-3 text-xs text-slate-500">
-                    Highlighted copy is associated with an open automated finding.
+                    Highlighted copy is associated with an outstanding automated finding.
                   </p>
                 )}
               </div>
@@ -80,7 +121,12 @@ export default async function SubmissionDetailPage({ params }: DetailProps) {
               <div className="space-y-4">
                 {submission.findings.length > 0 ? (
                   submission.findings.map((finding, index) => (
-                    <FindingCard key={finding.id} finding={finding} index={index} />
+                    <FindingCard
+                      key={finding.id}
+                      finding={finding}
+                      index={index}
+                      readOnly={!isLatestVersion}
+                    />
                   ))
                 ) : (
                   <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5 text-sm text-emerald-800">
@@ -104,6 +150,28 @@ export default async function SubmissionDetailPage({ params }: DetailProps) {
                 <Detail icon={UserRound} label="Submitted by" value={submission.submittedBy} />
                 <Detail icon={Calendar} label="Submitted" value={formatDate(submission.createdAt)} />
               </dl>
+              {versions.length > 1 && (
+                <div className="mt-5 border-t border-slate-100 pt-4">
+                  <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    <History className="size-3.5" /> Version history
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {versions.map((version) => (
+                      <Link
+                        key={version.id}
+                        href={`/submissions/${version.id}`}
+                        className={
+                          version.id === submission.id
+                            ? "rounded-md bg-slate-900 px-2.5 py-1.5 text-xs font-semibold text-white"
+                            : "rounded-md border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                        }
+                      >
+                        v{version.versionNumber}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              )}
               {submission.destinationUrl && (
                 <a
                   href={submission.destinationUrl}
@@ -116,11 +184,36 @@ export default async function SubmissionDetailPage({ params }: DetailProps) {
               )}
             </section>
 
-            <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/30">
-              <h2 className="font-semibold text-slate-950">Reviewer decision</h2>
-              <p className="mt-1 text-xs leading-5 text-slate-500">Your decision is recorded with your name and timestamp.</p>
-              <div className="mt-5"><DecisionForm submissionId={submission.id} /></div>
-            </section>
+            {isLatestVersion ? (
+              <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/30">
+                <h2 className="font-semibold text-slate-950">Reviewer decision</h2>
+                <p className="mt-1 text-xs leading-5 text-slate-500">Your decision is recorded with your name and timestamp.</p>
+                <div className="mt-5">
+                  <DecisionForm
+                    key={requestedFindings.map((finding) => finding.id).join(",")}
+                    submissionId={submission.id}
+                    requestedChanges={requestedFindings.map(
+                      (finding) => `${finding.category}: ${finding.recommendation}`,
+                    )}
+                  />
+                </div>
+              </section>
+            ) : (
+              <section className="rounded-xl border border-violet-200 bg-violet-50 p-5">
+                <h2 className="font-semibold text-violet-950">Historical version</h2>
+                <p className="mt-1 text-sm leading-6 text-violet-800">
+                  Findings and decisions are read-only. Open the latest version to continue review.
+                </p>
+                {versions[0] && (
+                  <Link
+                    href={`/submissions/${versions[0].id}`}
+                    className="mt-3 inline-flex text-sm font-semibold text-violet-900 underline underline-offset-4"
+                  >
+                    Open version {versions[0].versionNumber}
+                  </Link>
+                )}
+              </section>
+            )}
 
             <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/30">
               <h2 className="font-semibold text-slate-950">Audit trail</h2>

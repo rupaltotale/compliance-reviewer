@@ -1,3 +1,53 @@
+begin;
+
+-- Collect the known demo groups and every version descended from them.
+create temporary table clearpath_demo_submission_ids on commit drop as
+with recursive demo_tree as (
+  select id
+  from public.submissions
+  where submission_group_id in (
+    '11111111-1111-4111-8111-111111111111',
+    '22222222-2222-4222-8222-222222222222',
+    '33333333-3333-4333-8333-333333333333',
+    '44444444-4444-4444-8444-444444444444',
+    '55555555-5555-4555-8555-555555555555',
+    '66666666-6666-4666-8666-666666666666',
+    '77777777-7777-4777-8777-777777777777',
+    '88888888-8888-4888-8888-888888888888',
+    '99999999-9999-4999-8999-999999999999',
+    'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  )
+    or id in (
+    '11111111-1111-4111-8111-111111111111',
+    '22222222-2222-4222-8222-222222222222',
+    '33333333-3333-4333-8333-333333333333',
+    '44444444-4444-4444-8444-444444444444',
+    '55555555-5555-4555-8555-555555555555',
+    '66666666-6666-4666-8666-666666666666',
+    '77777777-7777-4777-8777-777777777777',
+    '88888888-8888-4888-8888-888888888888',
+    '99999999-9999-4999-8999-999999999999',
+    'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+    )
+
+  union
+
+  select child.id
+  from public.submissions as child
+  join demo_tree as parent
+    on child.previous_version_id = parent.id
+)
+select id from demo_tree;
+
+-- Detach the collected chain before deletion to satisfy the self-referencing FK.
+update public.submissions
+set previous_version_id = null
+where id in (select id from clearpath_demo_submission_ids);
+
+-- Reset only ClearPath's known demo version trees. Other UI submissions are preserved.
+delete from public.submissions
+where id in (select id from clearpath_demo_submission_ids);
+
 insert into public.submissions (
   id, title, product_type, channel, submitted_by, affiliate_name, content,
   destination_url, status, risk_level, analysis_summary, created_at, updated_at
@@ -166,6 +216,24 @@ on conflict (id) do update set
   created_at = excluded.created_at,
   updated_at = excluded.updated_at;
 
+update public.submissions
+set
+  submission_group_id = id,
+  version_number = 1,
+  previous_version_id = null
+where id in (
+  '11111111-1111-4111-8111-111111111111',
+  '22222222-2222-4222-8222-222222222222',
+  '33333333-3333-4333-8333-333333333333',
+  '44444444-4444-4444-8444-444444444444',
+  '55555555-5555-4555-8555-555555555555',
+  '66666666-6666-4666-8666-666666666666',
+  '77777777-7777-4777-8777-777777777777',
+  '88888888-8888-4888-8888-888888888888',
+  '99999999-9999-4999-8999-999999999999',
+  'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+);
+
 insert into public.compliance_findings (
   id, submission_id, category, severity, flagged_text, explanation,
   recommendation, status, created_at
@@ -244,7 +312,7 @@ insert into public.compliance_findings (
     'best rewards card for every traveler',
     'This broad superlative lacks a defined comparison set and may not be supportable for every consumer.',
     'Define and substantiate a narrower comparison or remove the superlative.',
-    'open',
+    'requested',
     now() - interval '8 days 3 hours'
   ),
   (
@@ -255,7 +323,7 @@ insert into public.compliance_findings (
     'Limited time: apply today',
     'The copy creates urgency without stating the offer deadline or basis for the limitation.',
     'State the factual end date and applicable conditions, or remove the urgency language.',
-    'open',
+    'requested',
     now() - interval '8 days 3 hours'
   )
 on conflict (id) do update set
@@ -267,6 +335,54 @@ on conflict (id) do update set
   recommendation = excluded.recommendation,
   status = excluded.status,
   created_at = excluded.created_at;
+
+update public.compliance_findings
+set severity_rationale = case severity
+  when 'high' then
+    'High because the claim could materially mislead consumers about approval, eligibility, pricing, cost, or comparative value.'
+  when 'medium' then
+    'Medium because the claim needs qualification, context, or substantiation but is not an explicit material guarantee.'
+  else
+    'Low because the concern is limited and is unlikely to materially change a reasonable consumer’s understanding.'
+end
+where id in (
+  'f1111111-1111-4111-8111-111111111111',
+  'f1111111-1111-4111-8111-111111111112',
+  'f1111111-1111-4111-8111-111111111113',
+  'f2222222-2222-4222-8222-222222222221',
+  'f3333333-3333-4333-8333-333333333331',
+  'f6666666-6666-4666-8666-666666666661',
+  'f8888888-8888-4888-8888-888888888881',
+  'f8888888-8888-4888-8888-888888888882'
+);
+
+update public.compliance_findings
+set suggested_rewrites = case category
+  when 'Approval and qualification claims' then
+    array['Check your eligibility for a personal loan. Approval and available terms depend on underwriting and creditworthiness.']
+  when 'Qualification disclosure' then
+    array['Explore loan amounts up to $50,000. Available amounts and terms vary based on creditworthiness and underwriting.']
+  when 'Rates and APR context' then
+    array['Qualified applicants may receive a 0% introductory APR for [duration]. After that, a variable APR of [APR range] applies.']
+  when 'Comparative claims' then
+    array['Explore competitive rates available based on the applicant’s details and qualifications.']
+  when 'Urgency and pressure' then
+    array['Apply by [date] to be considered for this offer. Eligibility and terms apply.']
+  when 'Fees and costs' then
+    array['No [specific fee]. Other fees and costs may apply; review the terms for details.']
+  else
+    array[]::text[]
+end
+where id in (
+  'f1111111-1111-4111-8111-111111111111',
+  'f1111111-1111-4111-8111-111111111112',
+  'f1111111-1111-4111-8111-111111111113',
+  'f2222222-2222-4222-8222-222222222221',
+  'f3333333-3333-4333-8333-333333333331',
+  'f6666666-6666-4666-8666-666666666661',
+  'f8888888-8888-4888-8888-888888888881',
+  'f8888888-8888-4888-8888-888888888882'
+);
 
 insert into public.reviews (
   id, submission_id, reviewer, decision, comment, created_at
@@ -286,6 +402,14 @@ insert into public.reviews (
     'changes_requested',
     'Move the non-commitment disclosure closer to the primary prequalification claim.',
     now() - interval '5 days 2 hours'
+  ),
+  (
+    'b8888888-8888-4888-8888-888888888888',
+    '88888888-8888-4888-8888-888888888888',
+    'Alex Morgan',
+    'changes_requested',
+    E'Please address the following before resubmitting:\n• Comparative claims: Define and substantiate a narrower comparison or remove the superlative.\n• Urgency and pressure: State the factual end date and applicable conditions, or remove the urgency language.',
+    now() - interval '7 days'
   )
 on conflict (id) do update set
   submission_id = excluded.submission_id,
@@ -373,6 +497,22 @@ insert into public.audit_events (
     now() - interval '5 days 2 hours'
   ),
   (
+    'a8888888-8888-4888-8888-888888888881',
+    '88888888-8888-4888-8888-888888888888',
+    'finding_requested',
+    'Alex Morgan',
+    'Added to change request: Comparative claims',
+    now() - interval '7 days 2 minutes'
+  ),
+  (
+    'a8888888-8888-4888-8888-888888888882',
+    '88888888-8888-4888-8888-888888888888',
+    'finding_requested',
+    'Alex Morgan',
+    'Added to change request: Urgency and pressure',
+    now() - interval '7 days 1 minute'
+  ),
+  (
     'a8888888-8888-4888-8888-888888888888',
     '88888888-8888-4888-8888-888888888888',
     'changes_requested',
@@ -386,3 +526,5 @@ on conflict (id) do update set
   actor = excluded.actor,
   detail = excluded.detail,
   created_at = excluded.created_at;
+
+commit;

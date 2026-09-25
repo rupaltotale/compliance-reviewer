@@ -8,7 +8,7 @@ export function HighlightedContent({
   findings: ComplianceFinding[];
 }) {
   const activeText = findings
-    .filter((finding) => finding.status === "open")
+    .filter((finding) => finding.status === "open" || finding.status === "requested")
     .map((finding) => finding.flaggedText)
     .filter(Boolean)
     .sort((a, b) => b.length - a.length);

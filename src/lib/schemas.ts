@@ -4,15 +4,20 @@ import { channels, productTypes, riskLevels } from "@/lib/types";
 export const findingAnalysisSchema = z.object({
   category: z.string().min(1),
   severity: z.enum(riskLevels),
+  severityRationale: z.string().min(1),
   flaggedText: z.string().min(1),
   explanation: z.string().min(1),
   recommendation: z.string().min(1),
+  suggestedRewrites: z.array(z.string().min(1)).min(1).max(3),
 });
 
-export const complianceAnalysisSchema = z.object({
-  riskLevel: z.enum(riskLevels),
+export const modelComplianceAnalysisSchema = z.object({
   summary: z.string().min(1),
   findings: z.array(findingAnalysisSchema).max(12),
+});
+
+export const complianceAnalysisSchema = modelComplianceAnalysisSchema.extend({
+  riskLevel: z.enum(riskLevels),
 });
 
 export const newSubmissionSchema = z
