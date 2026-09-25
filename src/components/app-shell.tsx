@@ -1,7 +1,11 @@
 import Link from "next/link";
-import { ChevronDown, ShieldCheck } from "lucide-react";
+import { ShieldCheck } from "lucide-react";
+import { DemoRoleToggle } from "@/components/demo-role-toggle";
+import { getDemoUser } from "@/lib/demo-role-server";
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+export async function AppShell({ children }: { children: React.ReactNode }) {
+  const user = await getDemoUser();
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-950">
       <header className="border-b border-slate-200 bg-white">
@@ -17,17 +21,26 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </Link>
             <nav className="hidden items-center gap-6 text-sm md:flex">
               <Link href="/" className="font-semibold text-slate-950">
-                Review queue
+                {user.role === "reviewer" ? "Review queue" : "My submissions"}
               </Link>
-              <Link href="/submissions/new" className="font-medium text-slate-500 hover:text-slate-900">
-                New submission
-              </Link>
+              {user.role === "submitter" && (
+                <Link href="/submissions/new" className="font-medium text-slate-500 hover:text-slate-900">
+                  New submission
+                </Link>
+              )}
             </nav>
           </div>
-          <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
-            <span className="grid size-8 place-items-center rounded-full bg-slate-900 text-xs text-white">AM</span>
-            <span className="hidden sm:inline">Alex Morgan</span>
-            <ChevronDown className="size-4 text-slate-400" />
+          <div className="flex items-center gap-3">
+            <DemoRoleToggle role={user.role} />
+            <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
+              <span className="grid size-8 place-items-center rounded-full bg-slate-900 text-xs text-white">
+                {user.initials}
+              </span>
+              <div className="hidden sm:block">
+                <p className="leading-4">{user.name}</p>
+                <p className="text-[11px] font-medium text-slate-400">{user.label} demo</p>
+              </div>
+            </div>
           </div>
         </div>
       </header>

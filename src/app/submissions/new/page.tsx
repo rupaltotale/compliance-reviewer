@@ -1,9 +1,13 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { ArrowLeft, Sparkles } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { SubmissionForm } from "@/components/submissions/submission-form";
+import { getDemoRole } from "@/lib/demo-role-server";
 
-export default function NewSubmissionPage() {
+export default async function NewSubmissionPage() {
+  if ((await getDemoRole()) !== "submitter") redirect("/");
+
   return (
     <AppShell>
       <main className="mx-auto w-full max-w-4xl px-6 py-8 lg:py-10">

@@ -37,7 +37,7 @@ const seededSubmissions: Array<
     title: "Balance transfer launch email",
     productType: "credit_card",
     channel: "email",
-    submittedBy: "Jordan Williams",
+    submittedBy: "Sarah Chen",
     affiliateName: null,
     content:
       "0% interest credit card — apply today! Move your balance and start saving with no fees.",
@@ -53,7 +53,7 @@ const seededSubmissions: Array<
     title: "Spring mortgage search campaign",
     productType: "mortgage",
     channel: "paid_social",
-    submittedBy: "Priya Patel",
+    submittedBy: "Sarah Chen",
     affiliateName: null,
     content:
       "Get the lowest mortgage rate available. See your options in minutes with no impact to your credit score.",
@@ -69,7 +69,7 @@ const seededSubmissions: Array<
     title: "Debt consolidation overview",
     productType: "personal_loan",
     channel: "website",
-    submittedBy: "Miguel Santos",
+    submittedBy: "Sarah Chen",
     affiliateName: null,
     content:
       "Explore personal loan options for consolidating eligible debts. Rates and terms vary based on creditworthiness and other factors.",
@@ -85,7 +85,7 @@ const seededSubmissions: Array<
     title: "Travel card benefits page",
     productType: "credit_card",
     channel: "website",
-    submittedBy: "Avery Brooks",
+    submittedBy: "Sarah Chen",
     affiliateName: null,
     content:
       "Earn rewards on eligible travel purchases. Review the rates, fees, reward terms, and eligibility requirements before applying.",
@@ -101,7 +101,7 @@ const seededSubmissions: Array<
     title: "Homebuyer prequalification nurture",
     productType: "mortgage",
     channel: "email",
-    submittedBy: "Nora Kim",
+    submittedBy: "Sarah Chen",
     affiliateName: null,
     content:
       "Understand how much home you may be able to afford. Prequalification is an estimate, not a commitment to lend.",
@@ -117,7 +117,7 @@ const seededSubmissions: Array<
     title: "Weekend loan social creative",
     productType: "personal_loan",
     channel: "paid_social",
-    submittedBy: "Ethan Reed",
+    submittedBy: "Sarah Chen",
     affiliateName: null,
     content:
       "A personal loan could help cover an unexpected expense. Check available terms with no obligation to accept an offer.",
@@ -133,7 +133,7 @@ const seededSubmissions: Array<
     title: "Card comparison affiliate article",
     productType: "credit_card",
     channel: "affiliate",
-    submittedBy: "Leah Morgan",
+    submittedBy: "Sarah Chen",
     affiliateName: "Wallet Weekly",
     content:
       "ClearPath is the best rewards card for every traveler. Limited time: apply today for our biggest welcome offer.",
@@ -149,7 +149,7 @@ const seededSubmissions: Array<
     title: "Mortgage education hub refresh",
     productType: "mortgage",
     channel: "website",
-    submittedBy: "Olivia Martin",
+    submittedBy: "Sarah Chen",
     affiliateName: null,
     content:
       "Learn how down payments, loan terms, and credit profiles can affect mortgage pricing before you request prequalification.",
@@ -165,7 +165,7 @@ const seededSubmissions: Array<
     title: "Preferred partner loan banner",
     productType: "personal_loan",
     channel: "affiliate",
-    submittedBy: "Marcus Lee",
+    submittedBy: "Sarah Chen",
     affiliateName: "Credit Compass",
     content:
       "See personalized personal loan offers from ClearPath. Checking options does not guarantee approval; terms vary by applicant.",

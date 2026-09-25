@@ -4,6 +4,7 @@ import { AppShell } from "@/components/app-shell";
 import { QueueFilters } from "@/components/submissions/queue-filters";
 import { QueueTable } from "@/components/submissions/queue-table";
 import { listSubmissions } from "@/lib/db/repository";
+import { getDemoUser } from "@/lib/demo-role-server";
 import {
   channels,
   productTypes,
@@ -35,17 +36,19 @@ const isChannel = (value?: string): value is Channel =>
   channels.some((item) => item === value);
 
 export default async function Home({ searchParams }: HomeProps) {
+  const user = await getDemoUser();
+  const isReviewer = user.role === "reviewer";
   const rawFilters = await searchParams;
   const filters: QueueFilterValues = {
     status: isStatus(rawFilters.status) ? rawFilters.status : undefined,
     risk: isRisk(rawFilters.risk) ? rawFilters.risk : undefined,
     product: isProduct(rawFilters.product) ? rawFilters.product : undefined,
     channel: isChannel(rawFilters.channel) ? rawFilters.channel : undefined,
-    submittedBy: rawFilters.submittedBy?.trim() || undefined,
+    submittedBy: isReviewer ? rawFilters.submittedBy?.trim() || undefined : user.name,
   };
   const [submissions, allSubmissions] = await Promise.all([
     listSubmissions(filters),
-    listSubmissions(),
+    listSubmissions(isReviewer ? {} : { submittedBy: user.name }),
   ]);
   const latestActivity = Math.max(
     ...allSubmissions.map((item) => new Date(item.updatedAt).getTime()),
@@ -56,23 +59,25 @@ export default async function Home({ searchParams }: HomeProps) {
     {
       label: "In review",
       value: allSubmissions.filter((item) => item.status === "in_review").length,
-      detail: "Awaiting a final decision",
+      detail: isReviewer ? "Awaiting a final decision" : "Currently with compliance",
       icon: Clock3,
       tone: "text-blue-700 bg-blue-50",
     },
     {
       label: "High risk",
       value: allSubmissions.filter((item) => item.riskLevel === "high" && item.status !== "approved").length,
-      detail: "Prioritize these submissions",
+      detail: isReviewer ? "Prioritize these submissions" : "Review feedback is available",
       icon: ShieldAlert,
       tone: "text-red-700 bg-red-50",
     },
     {
-      label: "Approved this week",
+      label: isReviewer ? "Approved this week" : "Approved",
       value: allSubmissions.filter(
-        (item) => item.status === "approved" && new Date(item.updatedAt).getTime() >= weekAgo,
+        (item) =>
+          item.status === "approved" &&
+          (!isReviewer || new Date(item.updatedAt).getTime() >= weekAgo),
       ).length,
-      detail: "Final decisions recorded",
+      detail: isReviewer ? "Final decisions recorded" : "Ready for publication",
       icon: FileCheck2,
       tone: "text-emerald-700 bg-emerald-50",
     },
@@ -83,16 +88,26 @@ export default async function Home({ searchParams }: HomeProps) {
       <main className="mx-auto w-full max-w-[1440px] px-6 py-8 lg:px-10 lg:py-10">
         <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
           <div>
-            <p className="text-sm font-semibold text-teal-700">Compliance operations</p>
-            <h1 className="mt-1 text-3xl font-semibold tracking-tight text-slate-950">Review queue</h1>
-            <p className="mt-2 text-sm text-slate-500">Prioritize risk, review AI findings, and record human decisions.</p>
+            <p className="text-sm font-semibold text-teal-700">
+              {isReviewer ? "Compliance operations" : "Marketing submissions"}
+            </p>
+            <h1 className="mt-1 text-3xl font-semibold tracking-tight text-slate-950">
+              {isReviewer ? "Review queue" : "My submissions"}
+            </h1>
+            <p className="mt-2 text-sm text-slate-500">
+              {isReviewer
+                ? "Prioritize risk, review AI findings, and record human decisions."
+                : "Track review feedback and create new versions when changes are needed."}
+            </p>
           </div>
-          <Link
-            href="/submissions/new"
-            className="inline-flex items-center justify-center gap-2 self-start rounded-lg bg-teal-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-teal-800"
-          >
-            <Plus className="size-4" /> New submission
-          </Link>
+          {!isReviewer && (
+            <Link
+              href="/submissions/new"
+              className="inline-flex items-center justify-center gap-2 self-start rounded-lg bg-teal-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-teal-800"
+            >
+              <Plus className="size-4" /> New submission
+            </Link>
+          )}
         </div>
 
         <section className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -115,7 +130,9 @@ export default async function Home({ searchParams }: HomeProps) {
         <section className="mt-8">
           <div className="flex flex-col gap-4 rounded-t-xl border border-slate-200 bg-white px-5 py-4 md:flex-row md:items-center md:justify-between">
             <div>
-              <h2 className="font-semibold text-slate-950">All submissions</h2>
+              <h2 className="font-semibold text-slate-950">
+                {isReviewer ? "All submissions" : "Your submissions"}
+              </h2>
               <p className="mt-0.5 text-xs text-slate-500">{submissions.length} items in this view</p>
             </div>
             <QueueFilters
@@ -124,17 +141,17 @@ export default async function Home({ searchParams }: HomeProps) {
                 { name: "risk", label: "All risk levels", values: riskLevels, selected: filters.risk },
                 { name: "product", label: "All products", values: productTypes, selected: filters.product },
                 { name: "channel", label: "All channels", values: channels, selected: filters.channel },
-                {
+                ...(isReviewer ? [{
                   name: "submittedBy",
                   label: "All submitters",
                   values: submitters,
                   selected: filters.submittedBy,
                   humanizeValues: false,
-                },
+                }] : []),
               ]}
             />
           </div>
-          <QueueTable submissions={submissions} />
+          <QueueTable submissions={submissions} showSubmitter={isReviewer} />
         </section>
       </main>
     </AppShell>

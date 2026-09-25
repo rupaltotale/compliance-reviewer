@@ -4,13 +4,17 @@ import { ArrowLeft, FilePenLine } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { SubmissionForm } from "@/components/submissions/submission-form";
 import { getSubmission, getSubmissionVersions } from "@/lib/db/repository";
+import { getDemoUser } from "@/lib/demo-role-server";
 
 type EditProps = { params: Promise<{ id: string }> };
 
 export default async function EditSubmissionPage({ params }: EditProps) {
+  const user = await getDemoUser();
+  if (user.role !== "submitter") redirect("/");
   const { id } = await params;
   const submission = await getSubmission(id);
   if (!submission) notFound();
+  if (submission.submittedBy !== user.name) redirect("/");
   const versions = await getSubmissionVersions(submission.submissionGroupId);
   const latest = versions[0];
   if (latest && latest.id !== submission.id) {
@@ -62,7 +66,6 @@ export default async function EditSubmissionPage({ params }: EditProps) {
               title: submission.title,
               productType: submission.productType,
               channel: submission.channel,
-              submittedBy: submission.submittedBy,
               affiliateName: submission.affiliateName ?? "",
               destinationUrl: submission.destinationUrl ?? "",
               content: submission.content,

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { analyzeMarketing } from "@/lib/ai/analyze-marketing";
 import { generateRevision } from "@/lib/ai/generate-revision";
+import { requireDemoRole } from "@/lib/demo-role-server";
 import {
   createAnalyzedSubmission,
   createRequestComment,
@@ -14,8 +15,6 @@ import {
   setRequestCommentStatus,
 } from "@/lib/db/repository";
 import { newSubmissionSchema } from "@/lib/schemas";
-
-const demoReviewer = "Alex Morgan";
 
 export type SubmissionActionState = {
   message?: string;
@@ -40,8 +39,12 @@ export async function generateRevisionDraftAction(
   submissionId: string,
 ): Promise<RevisionDraftActionState> {
   try {
+    const submitter = await requireDemoRole("submitter");
     const submission = await getSubmission(submissionId);
     if (!submission) return { message: "The source submission could not be found." };
+    if (submission.submittedBy !== submitter.name) {
+      return { message: "Submitters can only revise their own submissions." };
+    }
     if (submission.status === "approved") {
       return { message: "Approved submissions are frozen." };
     }
@@ -110,11 +113,12 @@ export async function createSubmissionAction(
   _previousState: SubmissionActionState,
   formData: FormData,
 ): Promise<SubmissionActionState> {
+  const submitter = await requireDemoRole("submitter");
   const parsed = newSubmissionSchema.safeParse({
     title: formData.get("title"),
     productType: formData.get("productType"),
     channel: formData.get("channel"),
-    submittedBy: formData.get("submittedBy"),
+    submittedBy: submitter.name,
     affiliateName: formData.get("affiliateName"),
     content: formData.get("content"),
     destinationUrl: formData.get("destinationUrl"),
@@ -149,6 +153,7 @@ export async function createSubmissionVersionAction(
   _previousState: SubmissionActionState,
   formData: FormData,
 ): Promise<SubmissionActionState> {
+  const submitter = await requireDemoRole("submitter");
   const sourceSubmission = await getSubmission(sourceSubmissionId);
   if (!sourceSubmission) {
     return { message: "The source submission could not be found." };
@@ -156,11 +161,14 @@ export async function createSubmissionVersionAction(
   if (sourceSubmission.status === "approved") {
     return { message: "Approved submissions are frozen and cannot have new versions." };
   }
+  if (sourceSubmission.submittedBy !== submitter.name) {
+    return { message: "Submitters can only revise their own submissions." };
+  }
   const parsed = newSubmissionSchema.safeParse({
     title: formData.get("title"),
     productType: formData.get("productType"),
     channel: formData.get("channel"),
-    submittedBy: formData.get("submittedBy"),
+    submittedBy: submitter.name,
     affiliateName: formData.get("affiliateName"),
     content: formData.get("content"),
     destinationUrl: formData.get("destinationUrl"),
@@ -192,6 +200,7 @@ export async function createSubmissionVersionAction(
 }
 
 export async function updateFindingAction(formData: FormData) {
+  const reviewer = await requireDemoRole("reviewer");
   const findingId = String(formData.get("findingId") ?? "");
   const requestedStatus = String(formData.get("status") ?? "");
   const status =
@@ -201,7 +210,7 @@ export async function updateFindingAction(formData: FormData) {
   if (!findingId || !status) {
     throw new Error("A valid finding and resolution are required.");
   }
-  const submissionId = await setFindingStatus(findingId, status, demoReviewer);
+  const submissionId = await setFindingStatus(findingId, status, reviewer.name);
   revalidatePath("/");
   revalidatePath(`/submissions/${submissionId}`);
 }
@@ -210,15 +219,17 @@ export async function createRequestCommentAction(
   submissionId: string,
   formData: FormData,
 ) {
+  const reviewer = await requireDemoRole("reviewer");
   const comment = String(formData.get("comment") ?? "").trim();
   if (comment.length < 3 || comment.length > 2000) {
     throw new Error("Request comments must be between 3 and 2,000 characters.");
   }
-  await createRequestComment(submissionId, comment, demoReviewer);
+  await createRequestComment(submissionId, comment, reviewer.name);
   revalidatePath(`/submissions/${submissionId}`);
 }
 
 export async function updateRequestCommentAction(formData: FormData) {
+  const reviewer = await requireDemoRole("reviewer");
   const commentId = String(formData.get("commentId") ?? "");
   const requestedStatus = String(formData.get("status") ?? "");
   const status =
@@ -228,7 +239,7 @@ export async function updateRequestCommentAction(formData: FormData) {
   if (!commentId || !status) {
     throw new Error("A valid request comment and resolution are required.");
   }
-  const submissionId = await setRequestCommentStatus(commentId, status, demoReviewer);
+  const submissionId = await setRequestCommentStatus(commentId, status, reviewer.name);
   revalidatePath(`/submissions/${submissionId}`);
 }
 
@@ -239,6 +250,7 @@ export async function submitDecisionAction(
   _previousState: DecisionActionState,
   formData: FormData,
 ): Promise<DecisionActionState> {
+  const reviewer = await requireDemoRole("reviewer");
   const comment = String(formData.get("comment") ?? "").trim();
   const submission = await getSubmission(submissionId);
   if (!submission) {
@@ -256,7 +268,7 @@ export async function submitDecisionAction(
     };
   }
   try {
-    await recordApproval(submissionId, demoReviewer, comment || null);
+    await recordApproval(submissionId, reviewer.name, comment || null);
   } catch (error) {
     return {
       message: error instanceof Error ? error.message : "The approval could not be recorded.",

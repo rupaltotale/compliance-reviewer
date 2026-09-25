@@ -6,6 +6,7 @@ import {
   demoReviews,
   demoSubmissions,
 } from "@/lib/db/demo-data";
+import { demoUsers } from "@/lib/demo-roles";
 import { getSupabase, isSupabaseConfigured } from "@/lib/db/supabase";
 import type { ComplianceAnalysis, NewSubmissionInput } from "@/lib/schemas";
 import type {
@@ -87,7 +88,7 @@ const mapSubmission = (row: SubmissionRow): Submission => ({
   title: row.title,
   productType: row.product_type,
   channel: row.channel,
-  submittedBy: row.submitted_by,
+  submittedBy: demoUsers.submitter.name,
   affiliateName: row.affiliate_name,
   content: row.content,
   destinationUrl: row.destination_url,
@@ -169,6 +170,9 @@ const demoStore =
   });
 globalWithDemo.clearPathDemo = demoStore;
 demoStore.requestComments ??= [];
+demoStore.submissions.forEach((submission) => {
+  submission.submittedBy = demoUsers.submitter.name;
+});
 
 function latestVersions(submissions: Submission[]) {
   return [...submissions]

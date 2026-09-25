@@ -5,7 +5,13 @@ import type { Submission } from "@/lib/types";
 import { formatDate, humanize } from "@/lib/utils";
 import { StatusBadge } from "@/components/ui/status-badge";
 
-export function QueueTable({ submissions }: { submissions: Submission[] }) {
+export function QueueTable({
+  submissions,
+  showSubmitter = true,
+}: {
+  submissions: Submission[];
+  showSubmitter?: boolean;
+}) {
   const router = useRouter();
 
   if (submissions.length === 0) {
@@ -24,7 +30,7 @@ export function QueueTable({ submissions }: { submissions: Submission[] }) {
             <th className="px-5 py-3">Submission</th>
             <th className="px-4 py-3">Product</th>
             <th className="px-4 py-3">Channel</th>
-            <th className="px-4 py-3">Submitted by</th>
+            {showSubmitter && <th className="px-4 py-3">Submitted by</th>}
             <th className="px-4 py-3">Risk</th>
             <th className="px-4 py-3">Status</th>
             <th className="px-4 py-3">Submitted</th>
@@ -58,7 +64,9 @@ export function QueueTable({ submissions }: { submissions: Submission[] }) {
               </td>
               <td className="px-4 py-4 text-slate-600">{humanize(submission.productType)}</td>
               <td className="px-4 py-4 text-slate-600">{humanize(submission.channel)}</td>
-              <td className="px-4 py-4 text-slate-600">{submission.submittedBy}</td>
+              {showSubmitter && (
+                <td className="px-4 py-4 text-slate-600">{submission.submittedBy}</td>
+              )}
               <td className="px-4 py-4"><StatusBadge value={submission.riskLevel} dot /></td>
               <td className="px-4 py-4"><StatusBadge value={submission.status} /></td>
               <td className="px-4 py-4 text-slate-500">{formatDate(submission.createdAt, { year: undefined })}</td>

@@ -36,7 +36,6 @@ type SubmissionFormValues = {
   title: string;
   productType: ProductType;
   channel: Channel;
-  submittedBy: string;
   affiliateName: string;
   destinationUrl: string;
   content: string;
@@ -59,7 +58,6 @@ export function SubmissionForm({
   const [channel, setChannel] = useState<Channel>(initialValues?.channel ?? "website");
   const [productType, setProductType] = useState(initialValues?.productType ?? "");
   const [title, setTitle] = useState(initialValues?.title ?? "");
-  const [submittedBy, setSubmittedBy] = useState(initialValues?.submittedBy ?? "Taylor Brooks");
   const [affiliateName, setAffiliateName] = useState(initialValues?.affiliateName ?? "");
   const [destinationUrl, setDestinationUrl] = useState(initialValues?.destinationUrl ?? "");
   const [content, setContent] = useState(initialValues?.content ?? "");
@@ -93,9 +91,6 @@ export function SubmissionForm({
             <select className={inputClass} name="channel" value={channel} onChange={(event) => setChannel(event.target.value as Channel)}>
               {channels.map((value) => <option key={value} value={value}>{humanize(value)}</option>)}
             </select>
-          </Field>
-          <Field label="Submitted by" error={field("submittedBy")}>
-            <input className={inputClass} name="submittedBy" value={submittedBy} onChange={(event) => setSubmittedBy(event.target.value)} />
           </Field>
           <Field label="Affiliate name" error={field("affiliateName")} hint={channel === "affiliate" ? "Required for affiliate submissions." : "Optional"}>
             <input className={inputClass} name="affiliateName" value={affiliateName} onChange={(event) => setAffiliateName(event.target.value)} placeholder="Partner or publisher name" />

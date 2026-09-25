@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import {
   ArrowLeft,
   Bot,
@@ -19,14 +19,19 @@ import { RequestComments } from "@/components/compliance/request-comments";
 import { HighlightedContent } from "@/components/submissions/highlighted-content";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { getSubmission, getSubmissionVersions } from "@/lib/db/repository";
+import { getDemoUser } from "@/lib/demo-role-server";
 import { formatDate, formatDateTime, humanize } from "@/lib/utils";
 
 type DetailProps = { params: Promise<{ id: string }> };
 
 export default async function SubmissionDetailPage({ params }: DetailProps) {
+  const user = await getDemoUser();
   const { id } = await params;
   const submission = await getSubmission(id);
   if (!submission) notFound();
+  if (user.role === "submitter" && submission.submittedBy !== user.name) {
+    redirect("/");
+  }
   const versions = await getSubmissionVersions(submission.submissionGroupId);
   const isLatestVersion = versions[0]?.id === submission.id;
   const outstandingFindings = submission.findings.filter(
@@ -43,7 +48,7 @@ export default async function SubmissionDetailPage({ params }: DetailProps) {
     <AppShell>
       <main className="mx-auto w-full max-w-[1440px] px-6 py-8 lg:px-10">
         <Link href="/" className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-slate-900">
-          <ArrowLeft className="size-4" /> Back to review queue
+          <ArrowLeft className="size-4" /> Back to {user.role === "reviewer" ? "review queue" : "my submissions"}
         </Link>
         <div className="mt-5 flex flex-col justify-between gap-4 border-b border-slate-200 pb-6 sm:flex-row sm:items-start">
           <div>
@@ -105,7 +110,7 @@ export default async function SubmissionDetailPage({ params }: DetailProps) {
                       key={finding.id}
                       finding={finding}
                       index={index}
-                      readOnly={!isLatestVersion || isApproved}
+                      readOnly={user.role !== "reviewer" || !isLatestVersion || isApproved}
                     />
                   ))
                 ) : (
@@ -122,7 +127,7 @@ export default async function SubmissionDetailPage({ params }: DetailProps) {
             <RequestComments
               submissionId={submission.id}
               comments={submission.requestComments}
-              readOnly={!isLatestVersion || isApproved}
+              readOnly={user.role !== "reviewer" || !isLatestVersion || isApproved}
             />
           </div>
 
@@ -170,7 +175,7 @@ export default async function SubmissionDetailPage({ params }: DetailProps) {
               )}
             </section>
 
-            {isLatestVersion && !isApproved && (
+            {user.role === "submitter" && isLatestVersion && !isApproved && (
               <Link
                 href={`/submissions/${submission.id}/edit`}
                 className="group block overflow-hidden rounded-xl border border-teal-700 bg-teal-700 p-5 text-white shadow-md shadow-teal-900/10 transition hover:-translate-y-0.5 hover:bg-teal-800 hover:shadow-lg hover:shadow-teal-900/15"
@@ -200,7 +205,7 @@ export default async function SubmissionDetailPage({ params }: DetailProps) {
               </Link>
             )}
 
-            {isLatestVersion && !isApproved ? (
+            {user.role === "reviewer" && isLatestVersion && !isApproved ? (
               <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/30">
                 <h2 className="font-semibold text-slate-950">Reviewer decision</h2>
                 <p className="mt-1 text-xs leading-5 text-slate-500">Your decision is recorded with your name and timestamp.</p>
@@ -226,7 +231,7 @@ export default async function SubmissionDetailPage({ params }: DetailProps) {
                   creation are frozen.
                 </p>
               </section>
-            ) : (
+            ) : !isLatestVersion ? (
               <section className="rounded-xl border border-violet-200 bg-violet-50 p-5">
                 <h2 className="font-semibold text-violet-950">Historical version</h2>
                 <p className="mt-1 text-sm leading-6 text-violet-800">
@@ -241,25 +246,35 @@ export default async function SubmissionDetailPage({ params }: DetailProps) {
                   </Link>
                 )}
               </section>
+            ) : (
+              <section className="rounded-xl border border-blue-200 bg-blue-50 p-5">
+                <h2 className="font-semibold text-blue-950">Review in progress</h2>
+                <p className="mt-1 text-sm leading-6 text-blue-800">
+                  Review the open findings and comments, then create a revised version when you
+                  are ready to address them.
+                </p>
+              </section>
             )}
 
-            <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/30">
-              <h2 className="font-semibold text-slate-950">Audit trail</h2>
-              <ol className="mt-5 space-y-0">
-                {submission.auditEvents.map((event, index) => (
-                  <li key={event.id} className="relative flex gap-3 pb-5 last:pb-0">
-                    {index < submission.auditEvents.length - 1 && (
-                      <span className="absolute left-[5px] top-3 h-full w-px bg-slate-200" />
-                    )}
-                    <span className="relative mt-1.5 size-2.5 shrink-0 rounded-full border-2 border-white bg-teal-600 ring-1 ring-teal-200" />
-                    <div>
-                      <p className="text-sm font-medium leading-5 text-slate-800">{event.detail}</p>
-                      <p className="mt-1 text-xs text-slate-400">{event.actor} · {formatDateTime(event.createdAt)}</p>
-                    </div>
-                  </li>
-                ))}
-              </ol>
-            </section>
+            {user.role === "reviewer" && (
+              <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/30">
+                <h2 className="font-semibold text-slate-950">Audit trail</h2>
+                <ol className="mt-5 space-y-0">
+                  {submission.auditEvents.map((event, index) => (
+                    <li key={event.id} className="relative flex gap-3 pb-5 last:pb-0">
+                      {index < submission.auditEvents.length - 1 && (
+                        <span className="absolute left-[5px] top-3 h-full w-px bg-slate-200" />
+                      )}
+                      <span className="relative mt-1.5 size-2.5 shrink-0 rounded-full border-2 border-white bg-teal-600 ring-1 ring-teal-200" />
+                      <div>
+                        <p className="text-sm font-medium leading-5 text-slate-800">{event.detail}</p>
+                        <p className="mt-1 text-xs text-slate-400">{event.actor} · {formatDateTime(event.createdAt)}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </section>
+            )}
           </aside>
         </div>
       </main>
