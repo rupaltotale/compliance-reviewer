@@ -1,10 +1,13 @@
-import Link from "next/link";
-import { ArrowUpRight } from "lucide-react";
+"use client";
+
+import { useRouter } from "next/navigation";
 import type { Submission } from "@/lib/types";
 import { formatDate, humanize } from "@/lib/utils";
 import { StatusBadge } from "@/components/ui/status-badge";
 
 export function QueueTable({ submissions }: { submissions: Submission[] }) {
+  const router = useRouter();
+
   if (submissions.length === 0) {
     return (
       <div className="grid min-h-52 place-items-center rounded-b-xl border border-t-0 border-slate-200 bg-white text-sm text-slate-500">
@@ -25,16 +28,25 @@ export function QueueTable({ submissions }: { submissions: Submission[] }) {
             <th className="px-4 py-3">Risk</th>
             <th className="px-4 py-3">Status</th>
             <th className="px-4 py-3">Submitted</th>
-            <th className="w-10 px-4 py-3"><span className="sr-only">Open</span></th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
           {submissions.map((submission) => (
-            <tr key={submission.id} className="group hover:bg-slate-50/80">
+            <tr
+              key={submission.id}
+              role="link"
+              tabIndex={0}
+              aria-label={`Open ${submission.title}`}
+              onClick={() => router.push(`/submissions/${submission.id}`)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  router.push(`/submissions/${submission.id}`);
+                }
+              }}
+              className="cursor-pointer hover:bg-slate-50/80 focus:bg-slate-50/80 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-teal-600"
+            >
               <td className="max-w-xs px-5 py-4">
-                <Link href={`/submissions/${submission.id}`} className="font-semibold text-slate-900 hover:text-teal-700">
-                  {submission.title}
-                </Link>
+                <span className="font-semibold text-slate-900">{submission.title}</span>
                 {submission.affiliateName && (
                   <p className="mt-0.5 truncate text-xs text-slate-500">{submission.affiliateName}</p>
                 )}
@@ -50,9 +62,6 @@ export function QueueTable({ submissions }: { submissions: Submission[] }) {
               <td className="px-4 py-4"><StatusBadge value={submission.riskLevel} dot /></td>
               <td className="px-4 py-4"><StatusBadge value={submission.status} /></td>
               <td className="px-4 py-4 text-slate-500">{formatDate(submission.createdAt, { year: undefined })}</td>
-              <td className="px-4 py-4">
-                <ArrowUpRight className="size-4 text-slate-300 group-hover:text-teal-700" />
-              </td>
             </tr>
           ))}
         </tbody>

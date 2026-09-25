@@ -31,17 +31,17 @@ The app includes an in-memory seeded mode when Supabase is not configured, so lo
 
 ## Key decisions
 
-- **AI performs pre-review, never final approval.** Model output creates advisory findings and a risk signal. Only a named human reviewer can approve or request changes.
+- **AI performs pre-review, never final approval.** Model output creates advisory findings and a risk signal. Only a named human reviewer can approve.
 - **Findings point to source copy.** Exact triggering text is stored and highlighted to make verification fast and reduce unsupported model conclusions.
 - **Severity is explained and aggregate risk is deterministic.** The model explains why each finding is low, medium, or high. The server validates those findings and sets submission risk to the highest finding severity rather than accepting a model-generated aggregate rating.
 - **Review sensitivity favors balanced precision.** The analyzer evaluates nearby qualification context, suppresses weak or optional copy suggestions, and does not equate conditional language with guaranteed approval. A narrow server calibration removes ungrounded quotes, duplicates, and conditional-approval false positives when clear qualification context is present.
 - **Recommendations include guarded drafting examples.** Findings can offer one to three alternative phrasings, but must use placeholders instead of inventing rates, fees, deadlines, eligibility criteria, or disclosure terms. The UI labels them as drafting aids rather than approved language.
-- **AI revisions are generated, checked, and previewed.** From the edit flow, requested findings can drive a revised draft. The server pre-reviews it with the same analyzer and performs at most one corrective pass before showing deterministic risk and residual findings. The user must explicitly apply the draft, and high-risk output is labeled as a starting point rather than ready-to-use copy.
+- **AI revisions are generated, checked, and previewed.** From the edit flow, open findings and request comments can drive a revised draft. The server pre-reviews it with the same analyzer and performs at most one corrective pass before showing deterministic risk and residual findings. The user must explicitly apply the draft, and high-risk output is labeled as a starting point rather than ready-to-use copy.
 - **Rules and prompt are inspectable.** Demonstration policy configuration and model instructions live outside React components.
 - **Submitted copy is untrusted.** The system prompt explicitly prevents instructions in marketing content from overriding review behavior.
 - **Human actions are durable workflow events.** Finding disposition and decisions append to the audit trail with actor and timestamp.
-- **Finding disposition feeds the decision.** Reviewers add valid findings to a consolidated change request or dismiss false positives. Selected recommendations prefill the final request-changes comment, while approval is blocked until requested changes are cleared.
-- **Edits create immutable versions.** A revised asset enters review as a new pending version with fresh findings. Earlier copy, findings, decisions, and audit events remain read-only and attributable.
+- **Open review items block approval.** Findings and independent request comments must be addressed or dismissed before approval.
+- **Edits create immutable versions.** A revised asset enters review as a new in-review version with fresh findings. Earlier copy, findings, decisions, and audit events remain read-only and attributable.
 - **The product is a queue, not a chatbot.** The primary value is prioritization, shared state, fast review, and accountability.
 - **Server-only trust boundary.** OpenAI and Supabase service credentials are never exposed to client components.
 
@@ -68,6 +68,7 @@ Business logic is kept out of React components. Pages consume a small repository
 
 - `submissions`: marketing asset, product/channel context, workflow state, risk, and analysis summary
 - `compliance_findings`: source-linked advisory concern, recommendation, severity, and reviewer disposition
+- `request_comments`: independent reviewer revision instructions and their disposition
 - `reviews`: append-only human decision and comment
 - `audit_events`: append-only actor/event timeline
 
@@ -90,9 +91,24 @@ Open [http://localhost:3000](http://localhost:3000). No environment variables ar
 ### Supabase persistence
 
 1. Create a Supabase project.
-2. Apply the SQL in `supabase/migrations/`.
-3. Run `supabase/seed.sql` in the SQL editor.
-4. Set the Supabase values from `.env.example`.
+2. Authenticate and link this checkout once:
+
+   ```bash
+   pnpm exec supabase login
+   pnpm exec supabase link --project-ref <project-ref>
+   ```
+
+3. Apply all new migrations:
+
+   ```bash
+   pnpm db:migrate
+   ```
+
+4. Run `supabase/seed.sql` in the SQL editor.
+5. Set the Supabase values from `.env.example`.
+
+The migration command applies only migrations that are not already recorded in the linked
+project's migration history. It does not run the seed file.
 
 `SUPABASE_SERVICE_ROLE_KEY` is server-only and is used for the unauthenticated take-home demo. Never expose it through a `NEXT_PUBLIC_` variable.
 

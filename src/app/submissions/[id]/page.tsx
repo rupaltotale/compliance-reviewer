@@ -15,6 +15,7 @@ import {
 import { AppShell } from "@/components/app-shell";
 import { FindingCard } from "@/components/compliance/finding-card";
 import { DecisionForm } from "@/components/compliance/decision-form";
+import { RequestComments } from "@/components/compliance/request-comments";
 import { HighlightedContent } from "@/components/submissions/highlighted-content";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { getSubmission, getSubmissionVersions } from "@/lib/db/repository";
@@ -28,11 +29,15 @@ export default async function SubmissionDetailPage({ params }: DetailProps) {
   if (!submission) notFound();
   const versions = await getSubmissionVersions(submission.submissionGroupId);
   const isLatestVersion = versions[0]?.id === submission.id;
-  const openFindings = submission.findings.filter((finding) => finding.status === "open");
-  const requestedFindings = submission.findings.filter(
-    (finding) => finding.status === "requested",
+  const outstandingFindings = submission.findings.filter(
+    (finding) => finding.status === "open",
   );
-  const outstandingFindings = openFindings.length + requestedFindings.length;
+  const outstandingRequestComments = submission.requestComments.filter(
+    (requestComment) => requestComment.status === "open",
+  );
+  const outstandingItemCount =
+    outstandingFindings.length + outstandingRequestComments.length;
+  const isApproved = submission.status === "approved";
 
   return (
     <AppShell>
@@ -59,7 +64,7 @@ export default async function SubmissionDetailPage({ params }: DetailProps) {
           </div>
           <div className="flex min-h-20 min-w-36 flex-col justify-center rounded-xl border border-slate-200 bg-white px-5 py-3 text-right">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Outstanding</p>
-            <p className="mt-1 text-2xl font-semibold leading-none text-slate-950">{outstandingFindings}</p>
+            <p className="mt-1 text-2xl font-semibold leading-none text-slate-950">{outstandingItemCount}</p>
           </div>
         </div>
 
@@ -74,7 +79,7 @@ export default async function SubmissionDetailPage({ params }: DetailProps) {
                 <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-6 text-[15px] leading-8 text-slate-800">
                   <HighlightedContent content={submission.content} findings={submission.findings} />
                 </div>
-                {outstandingFindings > 0 && (
+                {outstandingFindings.length > 0 && (
                   <p className="mt-3 text-xs text-slate-500">
                     Highlighted copy is associated with an outstanding automated finding.
                   </p>
@@ -100,7 +105,7 @@ export default async function SubmissionDetailPage({ params }: DetailProps) {
                       key={finding.id}
                       finding={finding}
                       index={index}
-                      readOnly={!isLatestVersion}
+                      readOnly={!isLatestVersion || isApproved}
                     />
                   ))
                 ) : (
@@ -113,6 +118,12 @@ export default async function SubmissionDetailPage({ params }: DetailProps) {
                 )}
               </div>
             </section>
+
+            <RequestComments
+              submissionId={submission.id}
+              comments={submission.requestComments}
+              readOnly={!isLatestVersion || isApproved}
+            />
           </div>
 
           <aside className="space-y-5 lg:sticky lg:top-6">
@@ -159,7 +170,7 @@ export default async function SubmissionDetailPage({ params }: DetailProps) {
               )}
             </section>
 
-            {isLatestVersion && (
+            {isLatestVersion && !isApproved && (
               <Link
                 href={`/submissions/${submission.id}/edit`}
                 className="group block overflow-hidden rounded-xl border border-teal-700 bg-teal-700 p-5 text-white shadow-md shadow-teal-900/10 transition hover:-translate-y-0.5 hover:bg-teal-800 hover:shadow-lg hover:shadow-teal-900/15"
@@ -171,15 +182,17 @@ export default async function SubmissionDetailPage({ params }: DetailProps) {
                   <div className="min-w-0 flex-1">
                     <span className="block text-base font-semibold">Create revised version</span>
                     <span className="mt-1 block text-xs leading-5 text-teal-50/80">
-                      Address findings with AI-assisted drafting and a fresh pre-review.
+                      Address findings and comments with AI-assisted drafting and a fresh pre-review.
                     </span>
                   </div>
                   <span className="grid size-9 shrink-0 place-items-center rounded-full bg-white text-sm font-bold text-teal-800">
-                    {outstandingFindings}
+                    {outstandingItemCount}
                   </span>
                 </div>
                 <div className="mt-4 flex items-center justify-between border-t border-white/15 pt-3 text-xs font-medium text-teal-50/80">
-                  <span>{requestedFindings.length} requested · {openFindings.length} open</span>
+                  <span>
+                    {outstandingFindings.length} findings · {outstandingRequestComments.length} comments
+                  </span>
                   <span className="text-white transition-transform group-hover:translate-x-0.5">
                     Start revision →
                   </span>
@@ -187,19 +200,31 @@ export default async function SubmissionDetailPage({ params }: DetailProps) {
               </Link>
             )}
 
-            {isLatestVersion ? (
+            {isLatestVersion && !isApproved ? (
               <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/30">
                 <h2 className="font-semibold text-slate-950">Reviewer decision</h2>
                 <p className="mt-1 text-xs leading-5 text-slate-500">Your decision is recorded with your name and timestamp.</p>
                 <div className="mt-5">
                   <DecisionForm
-                    key={requestedFindings.map((finding) => finding.id).join(",")}
+                    key={[
+                      ...outstandingFindings.map((finding) => finding.id),
+                      ...outstandingRequestComments.map((requestComment) => requestComment.id),
+                    ].join(",")}
                     submissionId={submission.id}
-                    requestedChanges={requestedFindings.map(
-                      (finding) => `${finding.category}: ${finding.recommendation}`,
-                    )}
+                    outstandingItemCount={outstandingItemCount}
                   />
                 </div>
+              </section>
+            ) : isApproved ? (
+              <section className="rounded-xl border border-emerald-200 bg-emerald-50 p-5">
+                <div className="flex items-center gap-2">
+                  <CircleCheck className="size-5 text-emerald-700" />
+                  <h2 className="font-semibold text-emerald-950">Approval recorded</h2>
+                </div>
+                <p className="mt-2 text-sm leading-6 text-emerald-800">
+                  This submission is final. Findings, request comments, decisions, and version
+                  creation are frozen.
+                </p>
               </section>
             ) : (
               <section className="rounded-xl border border-violet-200 bg-violet-50 p-5">

@@ -1,5 +1,8 @@
 begin;
 
+-- Allow this privileged seed transaction to replace frozen demo records.
+set local clearpath.seed_mode = 'on';
+
 -- Collect the known demo groups and every version descended from them.
 create temporary table clearpath_demo_submission_ids on commit drop as
 with recursive demo_tree as (
@@ -61,7 +64,7 @@ insert into public.submissions (
     'Fast Funds Network',
     'You’re guaranteed to qualify for up to $50,000. Act now and get the money you need as soon as tomorrow.',
     'https://example.com/fast-funds',
-    'pending',
+    'in_review',
     'high',
     'Three potential issues require human review before publication.',
     now() - interval '4 hours',
@@ -91,7 +94,7 @@ insert into public.submissions (
     null,
     'Get the lowest mortgage rate available. See your options in minutes with no impact to your credit score.',
     'https://example.com/mortgage',
-    'pending',
+    'in_review',
     'high',
     'The comparative rate claim may require substantiation and clearer scope.',
     now() - interval '2 days 1 hour',
@@ -136,7 +139,7 @@ insert into public.submissions (
     null,
     'Understand how much home you may be able to afford. Prequalification is an estimate, not a commitment to lend.',
     null,
-    'changes_requested',
+    'in_review',
     'medium',
     'One disclosure placement question was surfaced for reviewer attention.',
     now() - interval '6 days 5 hours',
@@ -166,7 +169,7 @@ insert into public.submissions (
     'Wallet Weekly',
     'ClearPath is the best rewards card for every traveler. Limited time: apply today for our biggest welcome offer.',
     'https://example.com/card-comparison',
-    'changes_requested',
+    'in_review',
     'medium',
     'Comparative and urgency language needs substantiation or revision.',
     now() - interval '8 days 3 hours',
@@ -196,7 +199,7 @@ insert into public.submissions (
     'Credit Compass',
     'See personalized personal loan offers from ClearPath. Checking options does not guarantee approval; terms vary by applicant.',
     'https://example.com/partner-loans',
-    'pending',
+    'in_review',
     'low',
     'No clear issues were identified by the demonstration rules.',
     now() - interval '22 hours',
@@ -312,7 +315,7 @@ insert into public.compliance_findings (
     'best rewards card for every traveler',
     'This broad superlative lacks a defined comparison set and may not be supportable for every consumer.',
     'Define and substantiate a narrower comparison or remove the superlative.',
-    'requested',
+    'open',
     now() - interval '8 days 3 hours'
   ),
   (
@@ -323,7 +326,7 @@ insert into public.compliance_findings (
     'Limited time: apply today',
     'The copy creates urgency without stating the offer deadline or basis for the limitation.',
     'State the factual end date and applicable conditions, or remove the urgency language.',
-    'requested',
+    'open',
     now() - interval '8 days 3 hours'
   )
 on conflict (id) do update set
@@ -394,22 +397,6 @@ insert into public.reviews (
     'approved',
     'Qualification language is clear and appropriately placed.',
     now() - interval '2 days 4 hours'
-  ),
-  (
-    'b6666666-6666-4666-8666-666666666666',
-    '66666666-6666-4666-8666-666666666666',
-    'Alex Morgan',
-    'changes_requested',
-    'Move the non-commitment disclosure closer to the primary prequalification claim.',
-    now() - interval '5 days 2 hours'
-  ),
-  (
-    'b8888888-8888-4888-8888-888888888888',
-    '88888888-8888-4888-8888-888888888888',
-    'Alex Morgan',
-    'changes_requested',
-    E'Please address the following before resubmitting:\n• Comparative claims: Define and substantiate a narrower comparison or remove the superlative.\n• Urgency and pressure: State the factual end date and applicable conditions, or remove the urgency language.',
-    now() - interval '7 days'
   )
 on conflict (id) do update set
   submission_id = excluded.submission_id,
@@ -487,38 +474,6 @@ insert into public.audit_events (
     'Alex Morgan',
     'Finding resolved: Qualification disclosure',
     now() - interval '5 days 3 hours'
-  ),
-  (
-    'a6666666-6666-4666-8666-666666666662',
-    '66666666-6666-4666-8666-666666666666',
-    'changes_requested',
-    'Alex Morgan',
-    'Changes requested',
-    now() - interval '5 days 2 hours'
-  ),
-  (
-    'a8888888-8888-4888-8888-888888888881',
-    '88888888-8888-4888-8888-888888888888',
-    'finding_requested',
-    'Alex Morgan',
-    'Added to change request: Comparative claims',
-    now() - interval '7 days 2 minutes'
-  ),
-  (
-    'a8888888-8888-4888-8888-888888888882',
-    '88888888-8888-4888-8888-888888888888',
-    'finding_requested',
-    'Alex Morgan',
-    'Added to change request: Urgency and pressure',
-    now() - interval '7 days 1 minute'
-  ),
-  (
-    'a8888888-8888-4888-8888-888888888888',
-    '88888888-8888-4888-8888-888888888888',
-    'changes_requested',
-    'Alex Morgan',
-    'Changes requested',
-    now() - interval '7 days'
   )
 on conflict (id) do update set
   submission_id = excluded.submission_id,

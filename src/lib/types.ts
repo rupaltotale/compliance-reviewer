@@ -1,8 +1,8 @@
 export const productTypes = ["personal_loan", "credit_card", "mortgage"] as const;
 export const channels = ["website", "email", "paid_social", "affiliate", "other"] as const;
-export const submissionStatuses = ["pending", "in_review", "changes_requested", "approved"] as const;
+export const submissionStatuses = ["in_review", "approved"] as const;
 export const riskLevels = ["low", "medium", "high"] as const;
-export const findingStatuses = ["open", "requested", "resolved", "dismissed"] as const;
+export const findingStatuses = ["open", "resolved", "dismissed"] as const;
 
 export type ProductType = (typeof productTypes)[number];
 export type Channel = (typeof channels)[number];
@@ -43,11 +43,20 @@ export type ComplianceFinding = {
   createdAt: string;
 };
 
+export type RequestComment = {
+  id: string;
+  submissionId: string;
+  comment: string;
+  requestedBy: string;
+  status: "open" | "resolved" | "dismissed";
+  createdAt: string;
+};
+
 export type Review = {
   id: string;
   submissionId: string;
   reviewer: string;
-  decision: "approved" | "changes_requested";
+  decision: "approved";
   comment: string | null;
   createdAt: string;
 };
@@ -63,6 +72,7 @@ export type AuditEvent = {
 
 export type SubmissionDetail = Submission & {
   findings: ComplianceFinding[];
+  requestComments: RequestComment[];
   reviews: Review[];
   auditEvents: AuditEvent[];
 };
@@ -71,4 +81,6 @@ export type QueueFilters = {
   status?: SubmissionStatus;
   risk?: RiskLevel;
   product?: ProductType;
+  channel?: Channel;
+  submittedBy?: string;
 };

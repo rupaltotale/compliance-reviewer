@@ -10,11 +10,9 @@ import {
 } from "@/app/actions";
 import { channels, productTypes, type Channel, type ProductType } from "@/lib/types";
 import { humanize } from "@/lib/utils";
-import {
-  RevisionChecklist,
-  type RequestedChange,
-} from "@/components/submissions/revision-checklist";
 import { AiRevisionAssistant } from "@/components/submissions/ai-revision-assistant";
+import { RevisionInputs } from "@/components/submissions/revision-inputs";
+import type { ComplianceFinding, RequestComment } from "@/lib/types";
 
 function SubmitButton({ isEditing }: { isEditing: boolean }) {
   const { pending } = useFormStatus();
@@ -47,14 +45,14 @@ type SubmissionFormValues = {
 export function SubmissionForm({
   initialValues,
   sourceSubmissionId,
-  requestedChanges = [],
-  reviewerComment,
+  openFindings = [],
+  openRequestComments = [],
   nextVersion,
 }: {
   initialValues?: SubmissionFormValues;
   sourceSubmissionId?: string;
-  requestedChanges?: RequestedChange[];
-  reviewerComment?: string | null;
+  openFindings?: ComplianceFinding[];
+  openRequestComments?: RequestComment[];
   nextVersion?: number;
 }) {
   const isEditing = Boolean(sourceSubmissionId);
@@ -109,17 +107,20 @@ export function SubmissionForm({
       </section>
 
       {isEditing && nextVersion && (
-        <RevisionChecklist
-          requestedChanges={requestedChanges}
-          reviewerComment={reviewerComment}
-          nextVersion={nextVersion}
-        />
+        <div className="rounded-xl border border-blue-200 bg-blue-50 px-5 py-4 text-sm text-blue-900">
+          This edit will create version {nextVersion} and run a fresh automated pre-review.
+        </div>
+      )}
+
+      {isEditing && (
+        <RevisionInputs findings={openFindings} requestComments={openRequestComments} />
       )}
 
       {isEditing && sourceSubmissionId && (
         <AiRevisionAssistant
           submissionId={sourceSubmissionId}
-          requestedChangeCount={requestedChanges.length}
+          findingCount={openFindings.length}
+          requestCommentCount={openRequestComments.length}
           onApply={setContent}
         />
       )}
@@ -137,7 +138,7 @@ export function SubmissionForm({
       <div className="flex flex-col-reverse items-start justify-between gap-4 border-t border-slate-200 pt-6 sm:flex-row sm:items-center">
         <p className="max-w-lg text-xs leading-5 text-slate-500">
           {isEditing
-            ? "The current version and its review history remain unchanged. This edit becomes a new pending version."
+            ? "The current version and its review history remain unchanged. This edit becomes a new in-review version."
             : "AI performs an advisory first pass. A compliance reviewer makes and records every final decision."}
         </p>
         <SubmitButton isEditing={isEditing} />

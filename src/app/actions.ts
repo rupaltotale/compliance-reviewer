@@ -6,13 +6,14 @@ import { analyzeMarketing } from "@/lib/ai/analyze-marketing";
 import { generateRevision } from "@/lib/ai/generate-revision";
 import {
   createAnalyzedSubmission,
+  createRequestComment,
   createSubmissionVersion,
   getSubmission,
-  recordDecision,
+  recordApproval,
   setFindingStatus,
+  setRequestCommentStatus,
 } from "@/lib/db/repository";
 import { newSubmissionSchema } from "@/lib/schemas";
-import { findingStatuses } from "@/lib/types";
 
 const demoReviewer = "Alex Morgan";
 
@@ -41,21 +42,24 @@ export async function generateRevisionDraftAction(
   try {
     const submission = await getSubmission(submissionId);
     if (!submission) return { message: "The source submission could not be found." };
-    const requestedFindings = submission.findings.filter(
-      (finding) => finding.status === "requested",
-    );
-    if (requestedFindings.length === 0) {
-      return { message: "Select at least one requested change before generating a revision." };
+    if (submission.status === "approved") {
+      return { message: "Approved submissions are frozen." };
     }
-    const reviewerComment = submission.reviews.find(
-      (review) => review.decision === "changes_requested",
-    )?.comment;
+    const outstandingFindings = submission.findings.filter(
+      (finding) => finding.status === "open",
+    );
+    const outstandingComments = submission.requestComments.filter(
+      (requestComment) => requestComment.status === "open",
+    );
+    if (outstandingFindings.length === 0 && outstandingComments.length === 0) {
+      return { message: "There are no open findings or request comments to include." };
+    }
     const firstDraft = await generateRevision({
       productType: submission.productType,
       channel: submission.channel,
       content: submission.content,
-      concerns: requestedFindings,
-      reviewerComment,
+      concerns: outstandingFindings,
+      requestComments: outstandingComments.map((requestComment) => requestComment.comment),
     });
     let finalDraft = firstDraft;
     let analysis = await analyzeMarketing({
@@ -72,8 +76,7 @@ export async function generateRevisionDraftAction(
         channel: submission.channel,
         content: firstDraft.content,
         concerns: analysis.findings,
-        reviewerComment:
-          "This is an internal corrective pass. Address the remaining pre-review findings without inventing product terms.",
+        requestComments: outstandingComments.map((requestComment) => requestComment.comment),
       });
       analysis = await analyzeMarketing({
         productType: submission.productType,
@@ -146,6 +149,13 @@ export async function createSubmissionVersionAction(
   _previousState: SubmissionActionState,
   formData: FormData,
 ): Promise<SubmissionActionState> {
+  const sourceSubmission = await getSubmission(sourceSubmissionId);
+  if (!sourceSubmission) {
+    return { message: "The source submission could not be found." };
+  }
+  if (sourceSubmission.status === "approved") {
+    return { message: "Approved submissions are frozen and cannot have new versions." };
+  }
   const parsed = newSubmissionSchema.safeParse({
     title: formData.get("title"),
     productType: formData.get("productType"),
@@ -184,12 +194,41 @@ export async function createSubmissionVersionAction(
 export async function updateFindingAction(formData: FormData) {
   const findingId = String(formData.get("findingId") ?? "");
   const requestedStatus = String(formData.get("status") ?? "");
-  const status = findingStatuses.find((value) => value === requestedStatus);
+  const status =
+    requestedStatus === "resolved" || requestedStatus === "dismissed"
+      ? requestedStatus
+      : undefined;
   if (!findingId || !status) {
     throw new Error("A valid finding and resolution are required.");
   }
   const submissionId = await setFindingStatus(findingId, status, demoReviewer);
   revalidatePath("/");
+  revalidatePath(`/submissions/${submissionId}`);
+}
+
+export async function createRequestCommentAction(
+  submissionId: string,
+  formData: FormData,
+) {
+  const comment = String(formData.get("comment") ?? "").trim();
+  if (comment.length < 3 || comment.length > 2000) {
+    throw new Error("Request comments must be between 3 and 2,000 characters.");
+  }
+  await createRequestComment(submissionId, comment, demoReviewer);
+  revalidatePath(`/submissions/${submissionId}`);
+}
+
+export async function updateRequestCommentAction(formData: FormData) {
+  const commentId = String(formData.get("commentId") ?? "");
+  const requestedStatus = String(formData.get("status") ?? "");
+  const status =
+    requestedStatus === "resolved" || requestedStatus === "dismissed"
+      ? requestedStatus
+      : undefined;
+  if (!commentId || !status) {
+    throw new Error("A valid request comment and resolution are required.");
+  }
+  const submissionId = await setRequestCommentStatus(commentId, status, demoReviewer);
   revalidatePath(`/submissions/${submissionId}`);
 }
 
@@ -200,27 +239,29 @@ export async function submitDecisionAction(
   _previousState: DecisionActionState,
   formData: FormData,
 ): Promise<DecisionActionState> {
-  const decision = formData.get("decision");
   const comment = String(formData.get("comment") ?? "").trim();
-  if (decision !== "approved" && decision !== "changes_requested") {
-    return { message: "Choose a review decision." };
-  }
   const submission = await getSubmission(submissionId);
   if (!submission) {
     return { message: "The submission could not be found." };
   }
-  const requestedFindings = submission.findings.filter(
-    (finding) => finding.status === "requested",
+  const outstandingFindings = submission.findings.filter(
+    (finding) => finding.status === "open",
   );
-  if (decision === "approved" && requestedFindings.length > 0) {
+  const outstandingComments = submission.requestComments.filter(
+    (requestComment) => requestComment.status === "open",
+  );
+  if (outstandingFindings.length > 0 || outstandingComments.length > 0) {
     return {
-      message: "Remove or dismiss requested changes before approving this submission.",
+      message: "Address or dismiss every open finding and request comment before approving.",
     };
   }
-  if (decision === "changes_requested" && comment.length < 10) {
-    return { message: "Explain the requested changes in at least 10 characters." };
+  try {
+    await recordApproval(submissionId, demoReviewer, comment || null);
+  } catch (error) {
+    return {
+      message: error instanceof Error ? error.message : "The approval could not be recorded.",
+    };
   }
-  await recordDecision(submissionId, demoReviewer, decision, comment || null);
   revalidatePath("/");
   revalidatePath(`/submissions/${submissionId}`);
   return { success: true, message: "Decision recorded in the audit trail." };

@@ -10,18 +10,20 @@ import { StatusBadge } from "@/components/ui/status-badge";
 
 export function AiRevisionAssistant({
   submissionId,
-  requestedChangeCount,
+  findingCount,
+  requestCommentCount,
   onApply,
 }: {
   submissionId: string;
-  requestedChangeCount: number;
+  findingCount: number;
+  requestCommentCount: number;
   onApply: (draft: string) => void;
 }) {
   const [result, setResult] = useState<RevisionDraftActionState>();
   const [applied, setApplied] = useState(false);
   const [pending, startTransition] = useTransition();
 
-  if (requestedChangeCount === 0) return null;
+  if (findingCount === 0 && requestCommentCount === 0) return null;
 
   function generate() {
     setApplied(false);
@@ -40,8 +42,9 @@ export function AiRevisionAssistant({
           <div>
             <h2 className="font-semibold text-violet-950">AI-assisted revision</h2>
             <p className="mt-0.5 text-xs leading-5 text-violet-700">
-              Draft from {requestedChangeCount} requested change
-              {requestedChangeCount === 1 ? "" : "s"}, then pre-review it before previewing.
+              Draft from {findingCount} open finding{findingCount === 1 ? "" : "s"} and{" "}
+              {requestCommentCount} request comment{requestCommentCount === 1 ? "" : "s"}, then
+              pre-review it before previewing.
             </p>
           </div>
         </div>

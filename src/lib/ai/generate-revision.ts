@@ -20,7 +20,7 @@ type RevisionInput = {
   channel: Channel;
   content: string;
   concerns: RevisionConcern[];
-  reviewerComment?: string | null;
+  requestComments: string[];
 };
 
 function deterministicRevision(input: RevisionInput) {
@@ -34,7 +34,9 @@ function deterministicRevision(input: RevisionInput) {
   return revisionDraftSchema.parse({
     content,
     changeSummary:
-      "Applied the available demonstration-rule examples to the requested source phrases.",
+      input.requestComments.length > 0
+        ? "Applied available finding rewrites. Independent comments require AI drafting or manual revision."
+        : "Applied the available demonstration-rule examples to the outstanding source phrases.",
   });
 }
 
@@ -54,8 +56,8 @@ export async function generateRevision(input: RevisionInput) {
           productType: input.productType,
           channel: input.channel,
           sourceMarketingCopy: input.content,
-          requestedChanges: input.concerns,
-          reviewerComment: input.reviewerComment ?? null,
+          complianceConcerns: input.concerns,
+          independentRequestComments: input.requestComments,
         }),
       },
     ],

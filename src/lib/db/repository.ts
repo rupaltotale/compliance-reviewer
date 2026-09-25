@@ -13,6 +13,7 @@ import type {
   ComplianceFinding,
   FindingStatus,
   QueueFilters,
+  RequestComment,
   Review,
   Submission,
   SubmissionDetail,
@@ -57,6 +58,15 @@ type ReviewRow = {
   reviewer: string;
   decision: Review["decision"];
   comment: string | null;
+  created_at: string;
+};
+
+type RequestCommentRow = {
+  id: string;
+  submission_id: string;
+  comment: string;
+  requested_by: string;
+  status: RequestComment["status"];
   created_at: string;
 };
 
@@ -121,6 +131,15 @@ const mapReview = (row: ReviewRow): Review => ({
   createdAt: row.created_at,
 });
 
+const mapRequestComment = (row: RequestCommentRow): RequestComment => ({
+  id: row.id,
+  submissionId: row.submission_id,
+  comment: row.comment,
+  requestedBy: row.requested_by,
+  status: row.status,
+  createdAt: row.created_at,
+});
+
 const mapAudit = (row: AuditRow): AuditEvent => ({
   id: row.id,
   submissionId: row.submission_id,
@@ -133,6 +152,7 @@ const mapAudit = (row: AuditRow): AuditEvent => ({
 type DemoStore = {
   submissions: Submission[];
   findings: ComplianceFinding[];
+  requestComments: RequestComment[];
   reviews: Review[];
   auditEvents: AuditEvent[];
 };
@@ -143,10 +163,12 @@ const demoStore =
   structuredClone({
     submissions: demoSubmissions,
     findings: demoFindings,
+    requestComments: [],
     reviews: demoReviews,
     auditEvents: demoAuditEvents,
   });
 globalWithDemo.clearPathDemo = demoStore;
+demoStore.requestComments ??= [];
 
 function latestVersions(submissions: Submission[]) {
   return [...submissions]
@@ -164,6 +186,8 @@ export async function listSubmissions(filters: QueueFilters = {}) {
       .filter((item) => !filters.status || item.status === filters.status)
       .filter((item) => !filters.risk || item.riskLevel === filters.risk)
       .filter((item) => !filters.product || item.productType === filters.product)
+      .filter((item) => !filters.channel || item.channel === filters.channel)
+      .filter((item) => !filters.submittedBy || item.submittedBy === filters.submittedBy)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
@@ -175,7 +199,9 @@ export async function listSubmissions(filters: QueueFilters = {}) {
   return latestVersions((data as SubmissionRow[]).map(mapSubmission))
     .filter((item) => !filters.status || item.status === filters.status)
     .filter((item) => !filters.risk || item.riskLevel === filters.risk)
-    .filter((item) => !filters.product || item.productType === filters.product);
+    .filter((item) => !filters.product || item.productType === filters.product)
+    .filter((item) => !filters.channel || item.channel === filters.channel)
+    .filter((item) => !filters.submittedBy || item.submittedBy === filters.submittedBy);
 }
 
 export async function getSubmissionVersions(groupId: string) {
@@ -202,6 +228,7 @@ export async function getSubmission(id: string): Promise<SubmissionDetail | null
       ? {
           ...submission,
           findings: demoStore.findings.filter((item) => item.submissionId === id),
+          requestComments: demoStore.requestComments.filter((item) => item.submissionId === id),
           reviews: demoStore.reviews.filter((item) => item.submissionId === id),
           auditEvents: demoStore.auditEvents
             .filter((item) => item.submissionId === id)
@@ -211,22 +238,116 @@ export async function getSubmission(id: string): Promise<SubmissionDetail | null
   }
 
   const supabase = getSupabase();
-  const [submissionResult, findingsResult, reviewsResult, auditResult] = await Promise.all([
+  const [submissionResult, findingsResult, commentsResult, reviewsResult, auditResult] = await Promise.all([
     supabase.from("submissions").select("*").eq("id", id).maybeSingle(),
     supabase.from("compliance_findings").select("*").eq("submission_id", id).order("created_at"),
+    supabase.from("request_comments").select("*").eq("submission_id", id).order("created_at"),
     supabase.from("reviews").select("*").eq("submission_id", id).order("created_at", { ascending: false }),
     supabase.from("audit_events").select("*").eq("submission_id", id).order("created_at", { ascending: false }),
   ]);
   const error =
-    submissionResult.error ?? findingsResult.error ?? reviewsResult.error ?? auditResult.error;
+    submissionResult.error ??
+    findingsResult.error ??
+    commentsResult.error ??
+    reviewsResult.error ??
+    auditResult.error;
   if (error) throw new Error(`Unable to load submission: ${error.message}`);
   if (!submissionResult.data) return null;
   return {
     ...mapSubmission(submissionResult.data as SubmissionRow),
     findings: (findingsResult.data as FindingRow[]).map(mapFinding),
+    requestComments: (commentsResult.data as RequestCommentRow[]).map(mapRequestComment),
     reviews: (reviewsResult.data as ReviewRow[]).map(mapReview),
     auditEvents: (auditResult.data as AuditRow[]).map(mapAudit),
   };
+}
+
+export async function createRequestComment(
+  submissionId: string,
+  comment: string,
+  actor: string,
+) {
+  if (!isSupabaseConfigured()) {
+    const submission = demoStore.submissions.find((item) => item.id === submissionId);
+    if (!submission) throw new Error("Submission not found.");
+    if (submission.status === "approved") throw new Error("Approved submissions are frozen.");
+    demoStore.requestComments.push({
+      id: crypto.randomUUID(),
+      submissionId,
+      comment,
+      requestedBy: actor,
+      status: "open",
+      createdAt: new Date().toISOString(),
+    });
+    demoStore.auditEvents.push({
+      id: crypto.randomUUID(),
+      submissionId,
+      eventType: "request_comment_created",
+      actor,
+      detail: "Independent revision comment added",
+      createdAt: new Date().toISOString(),
+    });
+    return;
+  }
+
+  const supabase = getSupabase();
+  const { error } = await supabase.from("request_comments").insert({
+    submission_id: submissionId,
+    comment,
+    requested_by: actor,
+  });
+  if (error) throw new Error(`Unable to add request comment: ${error.message}`);
+  const { error: auditError } = await supabase.from("audit_events").insert({
+    submission_id: submissionId,
+    event_type: "request_comment_created",
+    actor,
+    detail: "Independent revision comment added",
+  });
+  if (auditError) throw new Error(`Comment added, but audit logging failed: ${auditError.message}`);
+}
+
+export async function setRequestCommentStatus(
+  commentId: string,
+  status: "resolved" | "dismissed",
+  actor: string,
+) {
+  const eventDetail = status === "resolved" ? "Revision comment addressed" : "Revision comment dismissed";
+  if (!isSupabaseConfigured()) {
+    const requestComment = demoStore.requestComments.find((item) => item.id === commentId);
+    if (!requestComment) throw new Error("Request comment not found.");
+    const submission = demoStore.submissions.find(
+      (item) => item.id === requestComment.submissionId,
+    );
+    if (!submission) throw new Error("Submission not found.");
+    if (submission.status === "approved") throw new Error("Approved submissions are frozen.");
+    requestComment.status = status;
+    demoStore.auditEvents.push({
+      id: crypto.randomUUID(),
+      submissionId: requestComment.submissionId,
+      eventType: `request_comment_${status}`,
+      actor,
+      detail: eventDetail,
+      createdAt: new Date().toISOString(),
+    });
+    return requestComment.submissionId;
+  }
+
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from("request_comments")
+    .update({ status })
+    .eq("id", commentId)
+    .select("submission_id")
+    .single();
+  if (error) throw new Error(`Unable to update request comment: ${error.message}`);
+  const { error: auditError } = await supabase.from("audit_events").insert({
+    submission_id: data.submission_id,
+    event_type: `request_comment_${status}`,
+    actor,
+    detail: eventDetail,
+  });
+  if (auditError) throw new Error(`Comment changed, but audit logging failed: ${auditError.message}`);
+  return data.submission_id as string;
 }
 
 export async function setFindingStatus(
@@ -234,15 +355,21 @@ export async function setFindingStatus(
   status: FindingStatus,
   actor: string,
 ) {
+  if (status !== "resolved" && status !== "dismissed") {
+    throw new Error("Findings can only be marked addressed or dismissed.");
+  }
   const eventDetail = (category: string) => {
-    if (status === "requested") return `Added to change request: ${category}`;
-    if (status === "open") return `Removed from change request: ${category}`;
     if (status === "dismissed") return `Finding dismissed: ${category}`;
-    return `Finding resolved: ${category}`;
+    return `Finding addressed: ${category}`;
   };
   if (!isSupabaseConfigured()) {
     const finding = demoStore.findings.find((item) => item.id === findingId);
     if (!finding) throw new Error("Finding not found.");
+    const submission = demoStore.submissions.find((item) => item.id === finding.submissionId);
+    if (!submission) throw new Error("Submission not found.");
+    if (submission.status === "approved") {
+      throw new Error("Approved submissions are frozen.");
+    }
     finding.status = status;
     demoStore.auditEvents.push({
       id: crypto.randomUUID(),
@@ -256,6 +383,22 @@ export async function setFindingStatus(
   }
 
   const supabase = getSupabase();
+  const { data: findingData, error: findingError } = await supabase
+    .from("compliance_findings")
+    .select("submission_id")
+    .eq("id", findingId)
+    .maybeSingle();
+  if (findingError) throw new Error(`Unable to load finding: ${findingError.message}`);
+  if (!findingData) throw new Error("Finding not found.");
+  const { data: submissionData, error: submissionError } = await supabase
+    .from("submissions")
+    .select("status")
+    .eq("id", findingData.submission_id)
+    .single();
+  if (submissionError) throw new Error(`Unable to load submission: ${submissionError.message}`);
+  if (submissionData.status === "approved") {
+    throw new Error("Approved submissions are frozen.");
+  }
   const { data, error } = await supabase
     .from("compliance_findings")
     .update({ status })
@@ -273,56 +416,64 @@ export async function setFindingStatus(
   return data.submission_id as string;
 }
 
-export async function recordDecision(
+export async function recordApproval(
   submissionId: string,
   reviewer: string,
-  decision: Review["decision"],
   comment: string | null,
 ) {
   if (!isSupabaseConfigured()) {
     const submission = demoStore.submissions.find((item) => item.id === submissionId);
     if (!submission) throw new Error("Submission not found.");
-    submission.status = decision;
+    if (submission.status === "approved") throw new Error("This submission is already approved.");
+    const latestVersion = latestVersions(demoStore.submissions).find(
+      (item) => item.submissionGroupId === submission.submissionGroupId,
+    );
+    if (latestVersion?.id !== submission.id) {
+      throw new Error("Only the latest submission version can be approved.");
+    }
+    const hasOutstandingFindings = demoStore.findings.some(
+      (finding) =>
+        finding.submissionId === submissionId &&
+        finding.status === "open",
+    );
+    if (hasOutstandingFindings) {
+      throw new Error("Address or dismiss every open finding before approving.");
+    }
+    const hasOutstandingComments = demoStore.requestComments.some(
+      (requestComment) =>
+        requestComment.submissionId === submissionId && requestComment.status === "open",
+    );
+    if (hasOutstandingComments) {
+      throw new Error("Address or dismiss every open request comment before approving.");
+    }
+    submission.status = "approved";
     submission.updatedAt = new Date().toISOString();
     demoStore.reviews.push({
       id: crypto.randomUUID(),
       submissionId,
       reviewer,
-      decision,
+      decision: "approved",
       comment,
       createdAt: new Date().toISOString(),
     });
     demoStore.auditEvents.push({
       id: crypto.randomUUID(),
       submissionId,
-      eventType: decision,
+      eventType: "approved",
       actor: reviewer,
-      detail: decision === "approved" ? "Submission approved" : "Changes requested",
+      detail: "Submission approved",
       createdAt: new Date().toISOString(),
     });
     return;
   }
 
   const supabase = getSupabase();
-  const { error: reviewError } = await supabase.from("reviews").insert({
-    submission_id: submissionId,
-    reviewer,
-    decision,
-    comment,
+  const { error } = await supabase.rpc("approve_submission", {
+    target_submission_id: submissionId,
+    approval_reviewer: reviewer,
+    approval_comment: comment,
   });
-  if (reviewError) throw new Error(`Unable to record decision: ${reviewError.message}`);
-  const { error: statusError } = await supabase
-    .from("submissions")
-    .update({ status: decision })
-    .eq("id", submissionId);
-  if (statusError) throw new Error(`Decision recorded, but status update failed: ${statusError.message}`);
-  const { error: auditError } = await supabase.from("audit_events").insert({
-    submission_id: submissionId,
-    event_type: decision,
-    actor: reviewer,
-    detail: decision === "approved" ? "Submission approved" : "Changes requested",
-  });
-  if (auditError) throw new Error(`Decision recorded, but audit logging failed: ${auditError.message}`);
+  if (error) throw new Error(`Unable to approve submission: ${error.message}`);
 }
 
 type VersionMetadata = {
@@ -355,7 +506,7 @@ async function persistAnalyzedSubmission(
       affiliateName: input.affiliateName || null,
       content: input.content,
       destinationUrl: input.destinationUrl || null,
-      status: "pending",
+      status: "in_review",
       riskLevel: analysis.riskLevel,
       analysisSummary: analysis.summary,
       createdAt: timestamp,
@@ -414,7 +565,7 @@ async function persistAnalyzedSubmission(
     affiliate_name: input.affiliateName || null,
     content: input.content,
     destination_url: input.destinationUrl || null,
-    status: "pending",
+    status: "in_review",
     risk_level: analysis.riskLevel,
     analysis_summary: analysis.summary,
   });
@@ -485,6 +636,15 @@ export async function createSubmissionVersion(
   if (!isSupabaseConfigured()) {
     const source = demoStore.submissions.find((item) => item.id === sourceSubmissionId);
     if (!source) throw new Error("The source submission could not be found.");
+    const latestVersion = latestVersions(demoStore.submissions).find(
+      (item) => item.submissionGroupId === source.submissionGroupId,
+    );
+    if (latestVersion?.id !== source.id) {
+      throw new Error("A new version can only be created from the latest version.");
+    }
+    if (source.status === "approved") {
+      throw new Error("Approved submissions are frozen and cannot have new versions.");
+    }
     const versionNumber =
       Math.max(
         ...demoStore.submissions
@@ -510,12 +670,18 @@ export async function createSubmissionVersion(
   const source = mapSubmission(sourceData as SubmissionRow);
   const { data: latestData, error: latestError } = await supabase
     .from("submissions")
-    .select("version_number")
+    .select("id, version_number, status")
     .eq("submission_group_id", source.submissionGroupId)
     .order("version_number", { ascending: false })
     .limit(1)
     .single();
   if (latestError) throw new Error(`Unable to determine the next version: ${latestError.message}`);
+  if (latestData.id !== source.id) {
+    throw new Error("A new version can only be created from the latest version.");
+  }
+  if (latestData.status === "approved") {
+    throw new Error("Approved submissions are frozen and cannot have new versions.");
+  }
 
   return persistAnalyzedSubmission(input, analysis, {
     id: crypto.randomUUID(),

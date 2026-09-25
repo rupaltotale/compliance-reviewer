@@ -26,7 +26,7 @@ const seededSubmissions: Array<
     content:
       "You’re guaranteed to qualify for up to $50,000. Act now and get the money you need as soon as tomorrow.",
     destinationUrl: "https://example.com/fast-funds",
-    status: "pending",
+    status: "in_review",
     riskLevel: "high",
     analysisSummary: "Three potential issues require human review before publication.",
     createdAt: isoDaysAgo(0, 10),
@@ -58,7 +58,7 @@ const seededSubmissions: Array<
     content:
       "Get the lowest mortgage rate available. See your options in minutes with no impact to your credit score.",
     destinationUrl: "https://example.com/mortgage",
-    status: "pending",
+    status: "in_review",
     riskLevel: "high",
     analysisSummary: "The comparative rate claim may require substantiation and clearer scope.",
     createdAt: isoDaysAgo(2, 15),
@@ -106,7 +106,7 @@ const seededSubmissions: Array<
     content:
       "Understand how much home you may be able to afford. Prequalification is an estimate, not a commitment to lend.",
     destinationUrl: null,
-    status: "changes_requested",
+    status: "in_review",
     riskLevel: "medium",
     analysisSummary: "One disclosure placement question was surfaced for reviewer attention.",
     createdAt: isoDaysAgo(6, 9),
@@ -138,7 +138,7 @@ const seededSubmissions: Array<
     content:
       "ClearPath is the best rewards card for every traveler. Limited time: apply today for our biggest welcome offer.",
     destinationUrl: "https://example.com/card-comparison",
-    status: "changes_requested",
+    status: "in_review",
     riskLevel: "medium",
     analysisSummary: "Comparative and urgency language needs substantiation or revision.",
     createdAt: isoDaysAgo(8, 11),
@@ -170,7 +170,7 @@ const seededSubmissions: Array<
     content:
       "See personalized personal loan offers from ClearPath. Checking options does not guarantee approval; terms vary by applicant.",
     destinationUrl: "https://example.com/partner-loans",
-    status: "pending",
+    status: "in_review",
     riskLevel: "low",
     analysisSummary: "No clear issues were identified by the demonstration rules.",
     createdAt: isoDaysAgo(1, 16),
@@ -262,7 +262,7 @@ const seededFindings: Array<
     flaggedText: "best rewards card for every traveler",
     explanation: "This broad superlative lacks a defined comparison set and may not be supportable for every consumer.",
     recommendation: "Define and substantiate a narrower comparison or remove the superlative.",
-    status: "requested",
+    status: "open",
     createdAt: isoDaysAgo(8, 11),
   },
   {
@@ -273,7 +273,7 @@ const seededFindings: Array<
     flaggedText: "Limited time: apply today",
     explanation: "The copy creates urgency without stating the offer deadline or basis for the limitation.",
     recommendation: "State the factual end date and applicable conditions, or remove the urgency language.",
-    status: "requested",
+    status: "open",
     createdAt: isoDaysAgo(8, 11),
   },
 ];
@@ -317,23 +317,6 @@ export const demoReviews: Review[] = [
     comment: "Qualification language is clear and appropriately placed.",
     createdAt: isoDaysAgo(2, 10),
   },
-  {
-    id: "r6666666-6666-4666-8666-666666666666",
-    submissionId: demoSubmissions[5].id,
-    reviewer: "Alex Morgan",
-    decision: "changes_requested",
-    comment: "Move the non-commitment disclosure closer to the primary prequalification claim.",
-    createdAt: isoDaysAgo(5, 12),
-  },
-  {
-    id: "r8888888-8888-4888-8888-888888888888",
-    submissionId: demoSubmissions[7].id,
-    reviewer: "Alex Morgan",
-    decision: "changes_requested",
-    comment:
-      "Please address the following before resubmitting:\n• Comparative claims: Define and substantiate a narrower comparison or remove the superlative.\n• Urgency and pressure: State the factual end date and applicable conditions, or remove the urgency language.",
-    createdAt: isoDaysAgo(7, 14),
-  },
 ];
 
 export const demoAuditEvents: AuditEvent[] = [
@@ -360,7 +343,7 @@ export const demoAuditEvents: AuditEvent[] = [
     submissionId: review.submissionId,
     eventType: review.decision,
     actor: review.reviewer,
-    detail: review.decision === "approved" ? "Submission approved" : "Changes requested",
+    detail: "Submission approved",
     createdAt: review.createdAt,
   })),
 ];

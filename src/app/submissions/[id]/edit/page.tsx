@@ -16,11 +16,14 @@ export default async function EditSubmissionPage({ params }: EditProps) {
   if (latest && latest.id !== submission.id) {
     redirect(`/submissions/${latest.id}/edit`);
   }
-  const requestedFindings = submission.findings.filter(
-    (finding) => finding.status === "requested",
+  if (submission.status === "approved") {
+    redirect(`/submissions/${submission.id}`);
+  }
+  const outstandingFindings = submission.findings.filter(
+    (finding) => finding.status === "open",
   );
-  const latestChangeRequest = submission.reviews.find(
-    (review) => review.decision === "changes_requested",
+  const outstandingRequestComments = submission.requestComments.filter(
+    (requestComment) => requestComment.status === "open",
   );
 
   return (
@@ -53,14 +56,8 @@ export default async function EditSubmissionPage({ params }: EditProps) {
           <SubmissionForm
             sourceSubmissionId={submission.id}
             nextVersion={submission.versionNumber + 1}
-            requestedChanges={requestedFindings.map((finding) => ({
-              id: finding.id,
-              category: finding.category,
-              flaggedText: finding.flaggedText,
-              recommendation: finding.recommendation,
-              suggestedRewrites: finding.suggestedRewrites,
-            }))}
-            reviewerComment={latestChangeRequest?.comment}
+            openFindings={outstandingFindings}
+            openRequestComments={outstandingRequestComments}
             initialValues={{
               title: submission.title,
               productType: submission.productType,
