@@ -1,36 +1,131 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ClearPath Marketing Compliance Review
 
-## Getting Started
+A polished vertical slice of an internal review workspace for a fictional consumer finance company. ClearPath replaces an Excel-and-email process with a prioritized queue, advisory automated pre-review, human decisions, and a visible audit trail.
 
-First, run the development server:
+> **Important:** The included rules are illustrative demonstration rules. They are not legal advice and do not represent a complete consumer-finance compliance program. Production policies must be created, reviewed, versioned, and maintained with qualified legal and compliance stakeholders.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## Product problem
+
+ClearPath markets personal loans, credit cards, and mortgage prequalification through owned and affiliate channels. Compliance reviews currently move through spreadsheets and email, making ownership unclear, fragmenting context, and limiting marketing throughput.
+
+## Product hypothesis
+
+A centralized review queue plus automated first-pass analysis can reduce time spent finding routine issues and coordinating state. Human reviewers remain accountable for every final decision.
+
+The core workflow is:
+
+**Marketing submission → automated pre-review → prioritized queue → human review → approve/request changes → audit trail**
+
+## Demo path
+
+1. Open the review queue and scan risk, status, and workload metrics.
+2. Open **Fast Funds affiliate landing page**, a high-risk seeded example.
+3. Review source-linked findings and highlighted copy.
+4. Resolve or dismiss a finding.
+5. Approve the asset or request changes with a comment.
+6. Review the resulting audit events.
+7. Create a new submission and see its structured pre-review.
+
+The app includes an in-memory seeded mode when Supabase is not configured, so local evaluation is immediate. A configured deployment persists all changes in Supabase/Postgres. When `OPENAI_API_KEY` is absent, an explicitly labeled deterministic demo analyzer exercises the same structured workflow; configured deployments use OpenAI structured outputs.
+
+## Key decisions
+
+- **AI performs pre-review, never final approval.** Model output creates advisory findings and a risk signal. Only a named human reviewer can approve or request changes.
+- **Findings point to source copy.** Exact triggering text is stored and highlighted to make verification fast and reduce unsupported model conclusions.
+- **Rules and prompt are inspectable.** Demonstration policy configuration and model instructions live outside React components.
+- **Submitted copy is untrusted.** The system prompt explicitly prevents instructions in marketing content from overriding review behavior.
+- **Human actions are durable workflow events.** Finding disposition and decisions append to the audit trail with actor and timestamp.
+- **The product is a queue, not a chatbot.** The primary value is prioritization, shared state, fast review, and accountability.
+- **Server-only trust boundary.** OpenAI and Supabase service credentials are never exposed to client components.
+
+## Architecture
+
+```text
+src/
+  app/                       App Router pages and server actions
+  components/                Queue, review, form, and UI components
+  lib/
+    ai/                      Structured OpenAI analysis and system prompt
+    compliance/              Inspectable demonstration rules
+    db/                      Supabase boundary and seeded local repository
+    schemas.ts               Zod input/output contracts
+    types.ts                 Domain types
+supabase/
+  migrations/                Postgres schema, constraints, indexes, RLS
+  seed.sql                   Realistic review dataset
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Business logic is kept out of React components. Pages consume a small repository boundary, and all writes occur in server actions.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Data model
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `submissions`: marketing asset, product/channel context, workflow state, risk, and analysis summary
+- `compliance_findings`: source-linked advisory concern, recommendation, severity, and reviewer disposition
+- `reviews`: append-only human decision and comment
+- `audit_events`: append-only actor/event timeline
 
-## Learn More
+The migration enforces supported enum values, foreign keys, useful indexes, and updated timestamps.
 
-To learn more about Next.js, take a look at the following resources:
+## Local development
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Requirements: Node.js 22+ and npm.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+npm install
+cp .env.example .env.local
+npm run dev
+```
 
-## Deploy on Vercel
+Open [http://localhost:3000](http://localhost:3000). No environment variables are required for seeded in-memory demo mode.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Supabase persistence
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. Create a Supabase project.
+2. Apply the SQL in `supabase/migrations/`.
+3. Run `supabase/seed.sql` in the SQL editor.
+4. Set the Supabase values from `.env.example`.
+
+`SUPABASE_SERVICE_ROLE_KEY` is server-only and is used for the unauthenticated take-home demo. Never expose it through a `NEXT_PUBLIC_` variable.
+
+### OpenAI analysis
+
+Set `OPENAI_API_KEY` and optionally `OPENAI_MODEL`. The server sends product, channel, copy, URL context, and applicable rules to OpenAI and validates the structured response with Zod before persistence. Errors are surfaced rather than converted into success-shaped results.
+
+## Validation
+
+```bash
+npm run lint
+npm run build
+```
+
+## Assumptions
+
+- The evaluator is a trusted internal demo user; the fixed reviewer identity is **Alex Morgan**.
+- Full authentication and account setup are intentionally omitted.
+- Pasted copy is the primary V1 asset type.
+- Destination URLs are displayed as context but are not crawled or ingested.
+- One current version of an asset is reviewed; asset versioning is deferred.
+- Risk is an advisory prioritization signal, not an approval decision.
+- The local in-memory mode is for evaluation only; Supabase is the persistent deployment path.
+
+## Production considerations
+
+A production system would require:
+
+- authentication, SSO, and role-based access control
+- tenant/data isolation and restrictive RLS policies
+- marketing asset and disclosure versioning
+- configurable policy ownership and policy/rule version history
+- formal regulatory and legal review of every rule
+- immutable/tamper-evident audit storage
+- SLA, escalation, assignment, and notification workflows
+- affiliate onboarding and management
+- safe document, image, and destination-page ingestion
+- integrations with marketing and content-management systems
+- operational analytics and reviewer reporting
+- model monitoring, evaluation sets, prompt/model version capture, and drift analysis
+- rate limits, abuse controls, observability, retries, and transactional write orchestration
+
+## Vercel deployment
+
+Import the repository in Vercel, configure the variables from `.env.example`, and deploy. The application uses standard Next.js server actions and is Vercel-compatible.
