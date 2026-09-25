@@ -57,34 +57,9 @@ export default async function SubmissionDetailPage({ params }: DetailProps) {
             <h1 className="mt-3 text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">{submission.title}</h1>
             <p className="mt-2 text-sm text-slate-500">Submitted {formatDateTime(submission.createdAt)}</p>
           </div>
-          <div className="flex items-stretch gap-3">
-            {isLatestVersion && (
-              <Link
-                href={`/submissions/${submission.id}/edit`}
-                className="group inline-flex min-h-20 items-center gap-4 rounded-xl border border-slate-300 bg-white px-5 py-3 text-left shadow-sm hover:border-teal-300 hover:bg-teal-50/40"
-              >
-                <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-600 group-hover:bg-teal-100 group-hover:text-teal-700">
-                  <FilePenLine className="size-4" />
-                </span>
-                <span>
-                  <span className="block text-sm font-semibold text-slate-800 group-hover:text-teal-900">
-                    Create revised version
-                  </span>
-                  <span className="mt-1 block text-xs font-medium text-slate-500">
-                    {requestedFindings.length} requested · {openFindings.length} open
-                  </span>
-                </span>
-                <span className="ml-2 grid size-9 shrink-0 place-items-center rounded-full bg-slate-900 text-sm font-semibold text-white group-hover:bg-teal-700">
-                  {outstandingFindings}
-                </span>
-              </Link>
-            )}
-            {!isLatestVersion && (
-              <div className="flex min-h-20 min-w-36 flex-col justify-center rounded-xl border border-slate-200 bg-white px-5 py-3 text-right">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Outstanding</p>
-                <p className="mt-1 text-2xl font-semibold leading-none text-slate-950">{outstandingFindings}</p>
-              </div>
-            )}
+          <div className="flex min-h-20 min-w-36 flex-col justify-center rounded-xl border border-slate-200 bg-white px-5 py-3 text-right">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Outstanding</p>
+            <p className="mt-1 text-2xl font-semibold leading-none text-slate-950">{outstandingFindings}</p>
           </div>
         </div>
 
@@ -183,6 +158,34 @@ export default async function SubmissionDetailPage({ params }: DetailProps) {
                 </a>
               )}
             </section>
+
+            {isLatestVersion && (
+              <Link
+                href={`/submissions/${submission.id}/edit`}
+                className="group block overflow-hidden rounded-xl border border-teal-700 bg-teal-700 p-5 text-white shadow-md shadow-teal-900/10 transition hover:-translate-y-0.5 hover:bg-teal-800 hover:shadow-lg hover:shadow-teal-900/15"
+              >
+                <div className="flex items-center gap-4">
+                  <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-white/15 ring-1 ring-inset ring-white/20">
+                    <FilePenLine className="size-5" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <span className="block text-base font-semibold">Create revised version</span>
+                    <span className="mt-1 block text-xs leading-5 text-teal-50/80">
+                      Address findings with AI-assisted drafting and a fresh pre-review.
+                    </span>
+                  </div>
+                  <span className="grid size-9 shrink-0 place-items-center rounded-full bg-white text-sm font-bold text-teal-800">
+                    {outstandingFindings}
+                  </span>
+                </div>
+                <div className="mt-4 flex items-center justify-between border-t border-white/15 pt-3 text-xs font-medium text-teal-50/80">
+                  <span>{requestedFindings.length} requested · {openFindings.length} open</span>
+                  <span className="text-white transition-transform group-hover:translate-x-0.5">
+                    Start revision →
+                  </span>
+                </div>
+              </Link>
+            )}
 
             {isLatestVersion ? (
               <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/30">

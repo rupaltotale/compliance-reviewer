@@ -116,6 +116,60 @@ function deriveRiskLevel(findings: Array<{ severity: RiskLevel }>): RiskLevel {
   return "low";
 }
 
+function calibrateFindings(
+  content: string,
+  findings: ComplianceAnalysis["findings"],
+): ComplianceAnalysis["findings"] {
+  const normalizedContent = content.toLocaleLowerCase();
+  const hasQualificationContext =
+    /\b(subject to|depends? on|depending on|based on|creditworthiness|underwriting|eligibility criteria|qualification requirements)\b/i.test(
+      content,
+    );
+  const hasAbsoluteApprovalClaim =
+    /\b(guaranteed|everyone qualifies|all applicants|always approved|no one is denied|will be approved)\b/i.test(
+      content,
+    );
+
+  return findings.filter((finding, index) => {
+    if (!normalizedContent.includes(finding.flaggedText.toLocaleLowerCase())) {
+      return false;
+    }
+    const duplicate = findings.findIndex(
+      (candidate) =>
+        candidate.category === finding.category &&
+        candidate.flaggedText.toLocaleLowerCase() === finding.flaggedText.toLocaleLowerCase(),
+    );
+    if (duplicate !== index) return false;
+
+    const isConditionalApprovalFinding =
+      finding.category === "Approval and qualification claims" &&
+      /\b(may|might|could|potentially)\b/i.test(finding.flaggedText);
+    if (isConditionalApprovalFinding && hasQualificationContext && !hasAbsoluteApprovalClaim) {
+      return false;
+    }
+    return true;
+  });
+}
+
+function finalizeAnalysis(
+  content: string,
+  summary: string,
+  findings: ComplianceAnalysis["findings"],
+): ComplianceAnalysis {
+  const calibrated = calibrateFindings(content, findings);
+  const calibratedSummary =
+    calibrated.length === findings.length
+      ? summary
+      : calibrated.length > 0
+        ? `The calibrated pre-review identified ${calibrated.length} material potential issue${calibrated.length === 1 ? "" : "s"} for human review.`
+        : "No material issues were identified after evaluating the claims with their qualification context. Human review is still required.";
+  return complianceAnalysisSchema.parse({
+    riskLevel: deriveRiskLevel(calibrated),
+    summary: calibratedSummary,
+    findings: calibrated,
+  });
+}
+
 function demoAnalyze(input: AnalysisInput): ComplianceAnalysis {
   const findings = demoPatterns.flatMap((candidate) => {
     const match = input.content.match(candidate.pattern);
@@ -133,14 +187,13 @@ function demoAnalyze(input: AnalysisInput): ComplianceAnalysis {
         ]
       : [];
   });
-  return complianceAnalysisSchema.parse({
-    riskLevel: deriveRiskLevel(findings),
-    summary:
-      findings.length > 0
-        ? `The pre-review identified ${findings.length} potential issue${findings.length === 1 ? "" : "s"} for human review.`
-        : "No clear issues were identified by the demonstration rules. A human review is still required.",
+  return finalizeAnalysis(
+    input.content,
+    findings.length > 0
+      ? `The pre-review identified ${findings.length} potential issue${findings.length === 1 ? "" : "s"} for human review.`
+      : "No clear issues were identified by the demonstration rules. A human review is still required.",
     findings,
-  });
+  );
 }
 
 export async function analyzeMarketing(input: AnalysisInput): Promise<ComplianceAnalysis> {
@@ -171,8 +224,5 @@ export async function analyzeMarketing(input: AnalysisInput): Promise<Compliance
   if (!parsed) {
     throw new Error("The compliance analysis did not return a valid structured response.");
   }
-  return complianceAnalysisSchema.parse({
-    ...parsed,
-    riskLevel: deriveRiskLevel(parsed.findings),
-  });
+  return finalizeAnalysis(input.content, parsed.summary, parsed.findings);
 }

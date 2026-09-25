@@ -20,6 +20,11 @@ export const complianceAnalysisSchema = modelComplianceAnalysisSchema.extend({
   riskLevel: z.enum(riskLevels),
 });
 
+export const revisionDraftSchema = z.object({
+  content: z.string().min(20).max(20000),
+  changeSummary: z.string().min(1),
+});
+
 export const newSubmissionSchema = z
   .object({
     title: z.string().trim().min(3, "Enter a descriptive title.").max(120),

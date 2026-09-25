@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { analyzeMarketing } from "@/lib/ai/analyze-marketing";
+import { generateRevision } from "@/lib/ai/generate-revision";
 import {
   createAnalyzedSubmission,
   createSubmissionVersion,
@@ -19,6 +20,88 @@ export type SubmissionActionState = {
   message?: string;
   fieldErrors?: Record<string, string[]>;
 };
+
+export type RevisionDraftActionState = {
+  draft?: string;
+  changeSummary?: string;
+  riskLevel?: "low" | "medium" | "high";
+  analysisSummary?: string;
+  remainingFindings?: Array<{
+    category: string;
+    severity: "low" | "medium" | "high";
+    explanation: string;
+  }>;
+  passes?: number;
+  message?: string;
+};
+
+export async function generateRevisionDraftAction(
+  submissionId: string,
+): Promise<RevisionDraftActionState> {
+  try {
+    const submission = await getSubmission(submissionId);
+    if (!submission) return { message: "The source submission could not be found." };
+    const requestedFindings = submission.findings.filter(
+      (finding) => finding.status === "requested",
+    );
+    if (requestedFindings.length === 0) {
+      return { message: "Select at least one requested change before generating a revision." };
+    }
+    const reviewerComment = submission.reviews.find(
+      (review) => review.decision === "changes_requested",
+    )?.comment;
+    const firstDraft = await generateRevision({
+      productType: submission.productType,
+      channel: submission.channel,
+      content: submission.content,
+      concerns: requestedFindings,
+      reviewerComment,
+    });
+    let finalDraft = firstDraft;
+    let analysis = await analyzeMarketing({
+      productType: submission.productType,
+      channel: submission.channel,
+      content: firstDraft.content,
+      destinationUrl: submission.destinationUrl,
+    });
+    let passes = 1;
+
+    if (analysis.findings.length > 0 && process.env.OPENAI_API_KEY) {
+      finalDraft = await generateRevision({
+        productType: submission.productType,
+        channel: submission.channel,
+        content: firstDraft.content,
+        concerns: analysis.findings,
+        reviewerComment:
+          "This is an internal corrective pass. Address the remaining pre-review findings without inventing product terms.",
+      });
+      analysis = await analyzeMarketing({
+        productType: submission.productType,
+        channel: submission.channel,
+        content: finalDraft.content,
+        destinationUrl: submission.destinationUrl,
+      });
+      passes = 2;
+    }
+
+    return {
+      draft: finalDraft.content,
+      changeSummary: finalDraft.changeSummary,
+      riskLevel: analysis.riskLevel,
+      analysisSummary: analysis.summary,
+      remainingFindings: analysis.findings.map((finding) => ({
+        category: finding.category,
+        severity: finding.severity,
+        explanation: finding.explanation,
+      })),
+      passes,
+    };
+  } catch (error) {
+    return {
+      message: error instanceof Error ? error.message : "The revision could not be generated.",
+    };
+  }
+}
 
 export async function createSubmissionAction(
   _previousState: SubmissionActionState,

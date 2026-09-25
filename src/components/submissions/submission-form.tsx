@@ -14,6 +14,7 @@ import {
   RevisionChecklist,
   type RequestedChange,
 } from "@/components/submissions/revision-checklist";
+import { AiRevisionAssistant } from "@/components/submissions/ai-revision-assistant";
 
 function SubmitButton({ isEditing }: { isEditing: boolean }) {
   const { pending } = useFormStatus();
@@ -115,10 +116,17 @@ export function SubmissionForm({
         />
       )}
 
+      {isEditing && sourceSubmissionId && (
+        <AiRevisionAssistant
+          submissionId={sourceSubmissionId}
+          requestedChangeCount={requestedChanges.length}
+          onApply={setContent}
+        />
+      )}
+
       <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm shadow-slate-200/30">
         <h2 className="font-semibold text-slate-950">Marketing content</h2>
-        <p className="mt-1 text-sm text-slate-500">Paste the exact copy consumers will see. Formatting can be approximate.</p>
-        <Field label="Marketing copy" error={field("content")} className="mt-5">
+        <Field label="Marketing copy" hideLabel error={field("content")} className="mt-4">
           <textarea className={inputClass} name="content" value={content} onChange={(event) => setContent(event.target.value)} rows={11} placeholder="Paste headline, body copy, call to action, and disclosures…" />
         </Field>
       </section>
@@ -143,18 +151,22 @@ function Field({
   hint,
   error,
   className,
+  hideLabel = false,
   children,
 }: {
   label: string;
   hint?: string;
   error?: string;
   className?: string;
+  hideLabel?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <label className={className}>
-      <span className="text-sm font-semibold text-slate-800">{label}</span>
-      {hint && <span className="ml-2 text-xs font-normal text-slate-400">{hint}</span>}
+      <span className={hideLabel ? "sr-only" : "text-sm font-semibold text-slate-800"}>
+        {label}
+      </span>
+      {hint && !hideLabel && <span className="ml-2 text-xs font-normal text-slate-400">{hint}</span>}
       {children}
       {error && <span className="mt-1.5 block text-xs text-red-600">{error}</span>}
     </label>
